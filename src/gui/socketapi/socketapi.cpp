@@ -541,6 +541,10 @@ void SocketApi::processShareRequest(const QString &localFile, SocketListener *li
     }
 }
 
+void SocketApi::processUnShareRequest(const QString &localFile, SocketListener *listener)
+{
+}
+
 void SocketApi::broadcastStatusPushMessage(const QString &systemPath, SyncFileStatus fileStatus)
 {
     QString msg = buildMessage(QLatin1String("STATUS"), systemPath, fileStatus.toSocketAPIString());
@@ -582,6 +586,11 @@ void SocketApi::command_RETRIEVE_FILE_STATUS(const QString &argument, SocketList
 void SocketApi::command_SHARE(const QString &localFile, SocketListener *listener)
 {
     processShareRequest(localFile, listener, ShareDialogStartPage::UsersAndGroups);
+}
+
+void SocketApi::command_UNSHARE(const QString &localFile, SocketListener *listener)
+{
+    processUnShareRequest(localFile, listener);
 }
 
 void SocketApi::command_ACTIVITY(const QString &localFile, SocketListener *listener)
@@ -1045,6 +1054,10 @@ void SocketApi::sendSharingContextMenuOptions(const FileData &fileData, SocketLi
     auto theme = Theme::instance();
     if (!capabilities.shareAPI() || !(theme->userGroupSharing() || (theme->linkSharing() && capabilities.sharePublicLink())))
         return;
+
+    auto isShared = record._remotePerm.hasPermission(RemotePermissions::IsShared);
+
+    listener->sendMessage(QLatin1String("MENU_ITEM:UNSHARE") + flagString + tr("Unshare"));
 
     // If sharing is globally disabled, do not show any sharing entries.
     // If there is no permission to share for this file, add a disabled entry saying so

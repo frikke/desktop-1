@@ -130,13 +130,8 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
         return;
     }
 
-    const auto job = new OcsShareJob(folder->accountState()->account());
-    job->setProperty(folderAliasPropertyKey, customStateRequestInfo.folderAlias);
-    connect(job, &OcsShareJob::shareJobFinished, this, &ShellExtensionsServer::slotSharesFetched);
-    connect(job, &OcsJob::ocsError, this, &ShellExtensionsServer::slotSharesFetchError);
-
     {
-        _customStateSocketConnections.insert(socket->socketDescriptor(), QObject::connect(this, &ShellExtensionsServer::fetchSharesJobFinished, [this, socket, filePathRelative, composeMessageReplyFromRecord](const QString &folderAlias) {
+        _customStateSocketConnections.insert(socket->socketDescriptor(), QObject::connect(this, &ShellExtensionsServer::fetchPermissionsJobFinished, [this, socket, filePathRelative, composeMessageReplyFromRecord](const QString &folderAlias) {
             {
                 const auto connection = _customStateSocketConnections[socket->socketDescriptor()];
                 if (connection) {
@@ -170,12 +165,45 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
         return QStringLiteral("/");
     }();
 
-    if (!_runningFetchShareJobsForPaths.contains(sharesPath)) {
-        _runningFetchShareJobsForPaths.push_back(sharesPath);
-        qCInfo(lcShellExtServer) << "Started OcsShareJob for path: " << sharesPath;
-        job->getShares(sharesPath, {{QStringLiteral("subfiles"), QStringLiteral("true")}});
+    auto *lsColJob = new LsColJob(folder->accountState()->account(), QDir::cleanPath(folder->remotePath() + filePathRelative), this);
+
+    QList<QByteArray> props;
+    props << "resourcetype"
+          << "http://owncloud.org/ns:share-types"
+          << "http://owncloud.org/ns:permissions";
+
+    lsColJob->setProperties(props);
+
+    lsColJob->setProperties(props);
+
+    QObject::connect(lsColJob, &LsColJob::directoryListingIterated, this, [this](const QString &name, const QMap<QString, QString> &properties) {
+        auto a = name;
+        int b = 5;
+        b = 6;
+    });
+
+    QObject::connect(lsColJob, &LsColJob::finishedWithError, this, [this](QNetworkReply *reply) {
+        int a = 5;
+        a = 6;
+    });
+    QObject::connect(lsColJob, &LsColJob::finishedWithoutError, this, [this]() {
+        int a = 5;
+        a = 6;
+    });
+    lsColJob->start();
+
+    const auto propfindJob = new PropfindJob(folder->accountState()->account(), QDir::cleanPath(folder->remotePath() + filePathRelative));
+    propfindJob->setProperties({"http://owncloud.org/ns:permissions", "http://owncloud.org/ns:share-types"});
+    propfindJob->setProperty(folderAliasPropertyKey, customStateRequestInfo.folderAlias);
+    connect(propfindJob, &PropfindJob::result, this, &ShellExtensionsServer::slotPermissionsFetched);
+    connect(propfindJob, &PropfindJob::finishedWithError, this, &ShellExtensionsServer::slotPermissionsFetchError);
+
+    if (!_runningFetchShareJobsForPaths.contains(filePathRelative)) {
+        _runningFetchShareJobsForPaths.push_back(filePathRelative);
+        qCInfo(lcShellExtServer) << "Started PropfindJob for item: " << filePathRelative;
+        propfindJob->start();
     } else {
-        qCInfo(lcShellExtServer) << "OcsShareJob is already running for path: " << sharesPath;
+        qCInfo(lcShellExtServer) << "PropfindJob is already running for path: " << filePathRelative;
     }
 }
 
@@ -252,19 +280,21 @@ void ShellExtensionsServer::slotNewConnection()
     return;
 }
 
-void ShellExtensionsServer::slotSharesFetched(const QJsonDocument &reply)
+void ShellExtensionsServer::slotPermissionsFetched(const QVariantMap &values)
 {
-    const auto job = qobject_cast<OcsShareJob *>(sender());
+    const auto job = qobject_cast<PropfindJob *>(sender());
 
     Q_ASSERT(job);
     if (!job) {
-        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotSharesFetched is not called by OcsShareJob's signal!";
+        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotPermissionsFetched is not called by PropfindJob's signal!";
         return;
     }
 
-    const auto sharesPath = job->getParamValue(QStringLiteral("path"));
+    const auto filePath = job->path();
 
-    _runningFetchShareJobsForPaths.removeAll(sharesPath);
+    const auto filePathAdjusted = filePath.startsWith(QLatin1Char('/')) ? QString(filePath).remove(0, 1) : filePath;
+
+    _runningFetchShareJobsForPaths.removeAll(filePathAdjusted);
 
     const auto folderAlias = job->property(folderAliasPropertyKey).toString();
 
@@ -279,79 +309,46 @@ void ShellExtensionsServer::slotSharesFetched(const QJsonDocument &reply)
     Q_ASSERT(folder);
     if (!folder) {
         qCWarning(lcShellExtServer) << "folder not found for folderAlias: " << folderAlias;
+        emit fetchPermissionsJobFinished(folderAlias);
         return;
     }
 
-    const auto timeStamp = QDateTime::currentMSecsSinceEpoch();
-    QStringList recortPathsToResetIsSharedFlag;
-    const QByteArray pathOfSharesToResetIsSharedFlag = sharesPath == QStringLiteral("/") ? QByteArrayLiteral("") : sharesPath.toUtf8();
-    if (folder->journalDb()->listFilesInPath(pathOfSharesToResetIsSharedFlag, [&](const SyncJournalFileRecord &rec) {
-        recortPathsToResetIsSharedFlag.push_back(rec.path());
-    })) {
-        for (const auto &recordPath : recortPathsToResetIsSharedFlag) {
-            SyncJournalFileRecord record;
-            if (!folder->journalDb()->getFileRecord(recordPath, &record) || !record.isValid()) {
-                continue;
-            }
-            record._isShared = false;
-            record._lastShareStateFetchedTimestmap = timeStamp;
-            if (!folder->journalDb()->setFileRecord(record)) {
-                qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
-            }
-        }
+    SyncJournalFileRecord record;
+    if (!folder || !folder->journalDb()->getFileRecord(filePathAdjusted, &record) || !record.isValid()) {
+        emit fetchPermissionsJobFinished(folderAlias);
+        return;
+    }
+    record._isShared = values.contains(QStringLiteral("permissions"))
+        && RemotePermissions::fromServerString(values[QStringLiteral("permissions")].toString()).hasPermission(OCC::RemotePermissions::IsShared);
+
+    record._lastShareStateFetchedTimestmap = QDateTime::currentMSecsSinceEpoch();
+
+    if (!folder->journalDb()->setFileRecord(record)) {
+        qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
+        emit fetchPermissionsJobFinished(folderAlias);
+        return;
     }
 
-    const auto sharesFetched = reply.object().value(QStringLiteral("ocs")).toObject().value(QStringLiteral("data")).toArray();
-
-    for (const auto &share : sharesFetched) {
-        const auto shareData = share.toObject();
-
-        const auto sharePath = [&shareData, folder]() { 
-            const auto sharePathRemote = shareData.value(QStringLiteral("path")).toString();
-
-            const auto folderPath = folder->remotePath();
-            if (folderPath != QLatin1Char('/') && sharePathRemote.startsWith(folderPath)) {
-                // shares are ruturned with absolute remote path, so, if we have our remote root set to subfolder, we need to adjust share's remote path to relative local path
-                const auto sharePathLocalRelative = sharePathRemote.midRef(folder->remotePathTrailingSlash().length());
-                return sharePathLocalRelative.toString();
-            }
-            return sharePathRemote.size() > 1 && sharePathRemote.startsWith(QLatin1Char('/'))
-                ? QString(sharePathRemote).remove(0, 1)
-                : sharePathRemote;
-        }();
-
-        SyncJournalFileRecord record;
-        if (!folder || !folder->journalDb()->getFileRecord(sharePath, &record) || !record.isValid()) {
-            continue;
-        }
-        record._isShared = true;
-        record._lastShareStateFetchedTimestmap = timeStamp;
-
-        if (!folder->journalDb()->setFileRecord(record)) {
-            qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
-        }
-    }
-
-    qCInfo(lcShellExtServer) << "Succeeded OcsShareJob for path: " << sharesPath;
-    emit fetchSharesJobFinished(folderAlias);
+    qCInfo(lcShellExtServer) << "Succeeded PropfindJob for path: " << filePathAdjusted;
+    emit fetchPermissionsJobFinished(folderAlias);
 }
 
-void ShellExtensionsServer::slotSharesFetchError(int statusCode, const QString &message)
+void ShellExtensionsServer::slotPermissionsFetchError(QNetworkReply *reply)
 {
-    const auto job = qobject_cast<OcsShareJob *>(sender());
+    const auto job = qobject_cast<PropfindJob *>(sender());
 
     Q_ASSERT(job);
     if (!job) {
-        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotSharesFetched is not called by OcsShareJob's signal!";
+        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotSharesFetched is not called by PropfindJob's signal!";
         return;
     }
 
-    const auto sharesPath = job->getParamValue(QStringLiteral("path"));
+    const auto filePath = job->path();
 
-    _runningFetchShareJobsForPaths.removeAll(sharesPath);
+    _runningFetchShareJobsForPaths.removeAll(filePath);
 
-    emit fetchSharesJobFinished(sharesPath);
-    qCWarning(lcShellExtServer) << "Failed OcsShareJob for path: " << sharesPath;
+    emit fetchPermissionsJobFinished(filePath);
+    qCWarning(lcShellExtServer) << "Failed PropfindJob for filePath: " << filePath;
 }
 
 void ShellExtensionsServer::parseCustomStateRequest(QLocalSocket *socket, const QVariantMap &message)

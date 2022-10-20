@@ -22,6 +22,7 @@
 
 class QJsonDocument;
 class QLocalSocket;
+class QNetworkReply;
 
 namespace OCC {
 class ShellExtensionsServer : public QObject
@@ -53,7 +54,7 @@ public:
     void setIsSharedInvalidationInterval(qint64 interval);
 
 signals:
-    void fetchSharesJobFinished(const QString &folderAlias);
+    void fetchPermissionsJobFinished(const QString &folderAlias);
 
 private:
     void sendJsonMessageWithVersion(QLocalSocket *socket, const QVariantMap &message);
@@ -67,8 +68,8 @@ private:
 
 private slots:
     void slotNewConnection();
-    void slotSharesFetched(const QJsonDocument &reply);
-    void slotSharesFetchError(int statusCode, const QString &message);
+    void slotPermissionsFetched(const QVariantMap &values);
+    void slotPermissionsFetchError(QNetworkReply *reply);
 
 private:
     QLocalServer _localServer;
