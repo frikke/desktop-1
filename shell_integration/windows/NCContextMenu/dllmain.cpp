@@ -18,11 +18,19 @@
 #include "NCContextMenuFactory.h"
 #include "WinShellExtConstants.h"
 
+#include <fstream>
+#include <iostream>
+
 HINSTANCE   g_hInst = nullptr;
 long        g_cDllRef = 0;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "DllMain" << std::endl;
+
     switch (dwReason)
     {
     case DLL_PROCESS_ATTACH:
@@ -41,6 +49,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "DllGetClassObject" << std::endl;
+
     HRESULT hr;
     GUID guid;
 
@@ -66,11 +79,21 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
 
 STDAPI DllCanUnloadNow(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "DllCanUnloadNow" << std::endl;
+
     return g_cDllRef > 0 ? S_FALSE : S_OK;
 }
 
 STDAPI DllRegisterServer(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "DllRegisterServer" << std::endl;
+
     HRESULT hr;
     GUID guid;
 
@@ -99,6 +122,11 @@ STDAPI DllRegisterServer(void)
 
 STDAPI DllUnregisterServer(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "DllUnregisterServer" << std::endl;
+
     HRESULT hr = S_OK;
     GUID guid;
 

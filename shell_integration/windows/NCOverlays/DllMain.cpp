@@ -16,12 +16,20 @@
 #include "NCOverlayFactory.h"
 #include "WinShellExtConstants.h"
 
+#include <fstream>
+#include <iostream>
+
 HINSTANCE instanceHandle = nullptr;
 
 long dllReferenceCount = 0;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "DllMain" << std::endl;
+
     switch (dwReason)
     {
         case DLL_PROCESS_ATTACH:
@@ -39,6 +47,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID lpReserved)
 
 HRESULT CreateFactory(REFIID riid, void **ppv, int state)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "CreateFactory" << std::endl;
+
     HRESULT hResult = E_OUTOFMEMORY;
 
     NCOverlayFactory* ncOverlayFactory = new NCOverlayFactory(state);
@@ -52,6 +65,11 @@ HRESULT CreateFactory(REFIID riid, void **ppv, int state)
 
 STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "DllGetClassObject" << std::endl;
+
     HRESULT hResult = CLASS_E_CLASSNOTAVAILABLE;
     GUID guid;
  
@@ -80,11 +98,21 @@ STDAPI DllGetClassObject(REFCLSID rclsid, REFIID riid, void **ppv)
 
 STDAPI DllCanUnloadNow(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "DllCanUnloadNow" << std::endl;
+
     return dllReferenceCount > 0 ? S_FALSE : S_OK;
 }
 
 HRESULT RegisterCLSID(LPCOLESTR guidStr, PCWSTR overlayStr, PCWSTR szModule)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "RegisterCLSID" << std::endl;
+
     HRESULT hResult = S_OK;
 
     GUID guid;
@@ -107,6 +135,11 @@ HRESULT RegisterCLSID(LPCOLESTR guidStr, PCWSTR overlayStr, PCWSTR szModule)
 
 HRESULT UnregisterCLSID(LPCOLESTR guidStr, PCWSTR overlayStr)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "UnregisterCLSID" << std::endl;
+
     HRESULT hResult = S_OK;
     GUID guid;
 
@@ -129,6 +162,11 @@ HRESULT UnregisterCLSID(LPCOLESTR guidStr, PCWSTR overlayStr)
 
 HRESULT _stdcall DllRegisterServer(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "DllRegisterServer" << std::endl;
+
     HRESULT hResult = S_OK;
 
     wchar_t szModule[MAX_PATH];
@@ -153,6 +191,11 @@ HRESULT _stdcall DllRegisterServer(void)
 
 STDAPI DllUnregisterServer(void)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCOverlays " << "DllUnregisterServer" << std::endl;
+
     HRESULT hResult = S_OK;
 
     wchar_t szModule[MAX_PATH];
