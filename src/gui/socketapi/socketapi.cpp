@@ -23,6 +23,7 @@
 
 #include "config.h"
 #include "configfile.h"
+#include "deletejob.h"
 #include "folderman.h"
 #include "folder.h"
 #include "theme.h"
@@ -543,6 +544,7 @@ void SocketApi::processShareRequest(const QString &localFile, SocketListener *li
 
 void SocketApi::processLeaveShareRequest(const QString &localFile, SocketListener *listener)
 {
+    FolderMan::instance()->leaveShare(QDir::fromNativeSeparators(localFile));
 }
 
 void SocketApi::broadcastStatusPushMessage(const QString &systemPath, SyncFileStatus fileStatus)

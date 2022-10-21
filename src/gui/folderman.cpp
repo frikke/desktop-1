@@ -1540,6 +1540,20 @@ void FolderMan::editFileLocally(const QString &userId, const QString &relPath, c
     checkTokenForEditLocally->start();
 }
 
+void FolderMan::leaveShare(const QString &localFile)
+{
+    if (const auto folder = FolderMan::instance()->folderForPath(localFile)) {
+        const auto filePathRelative = QString(localFile).remove(folder->path());
+
+        const auto leaveShareJob = new SimpleApiJob(folder->accountState()->account(), folder->accountState()->account()->davPath() + filePathRelative);
+        leaveShareJob->setVerb(SimpleApiJob::Verb::Delete);
+        connect(leaveShareJob, &SimpleApiJob::resultReceived, this, [this, folder](int statusCode) {
+            scheduleFolder(folder);
+        });
+        leaveShareJob->start();
+    }
+}
+
 void FolderMan::trayOverallStatus(const QList<Folder *> &folders,
     SyncResult::Status *status, bool *unresolvedConflicts)
 {

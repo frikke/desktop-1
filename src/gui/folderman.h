@@ -216,6 +216,9 @@ public:
     /** opens a file with default app, if the file is present **/
     void editFileLocally(const QString &userId, const QString &relPath, const QString &token);
 
+    /** removes current user from the share **/
+    void leaveShare(const QString &localFile);
+
 signals:
     /**
       * signal to indicate a folder has changed its sync state.
