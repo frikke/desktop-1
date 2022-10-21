@@ -165,46 +165,103 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
         return QStringLiteral("/");
     }();
 
-    auto *lsColJob = new LsColJob(folder->accountState()->account(), QDir::cleanPath(folder->remotePath() + filePathRelative), this);
+    auto * const lsColJob = new LsColJob(folder->accountState()->account(), QDir::cleanPath(folder->remotePath() + filePathRelative), this);
 
     QList<QByteArray> props;
-    props << "resourcetype"
-          << "http://owncloud.org/ns:share-types"
+    props << "http://owncloud.org/ns:share-types"
           << "http://owncloud.org/ns:permissions";
 
     lsColJob->setProperties(props);
-
-    lsColJob->setProperties(props);
+    lsColJob->setProperty(folderAliasPropertyKey, customStateRequestInfo.folderAlias);
 
     QObject::connect(lsColJob, &LsColJob::directoryListingIterated, this, [this](const QString &name, const QMap<QString, QString> &properties) {
-        auto a = name;
-        int b = 5;
-        b = 6;
+        const auto job = qobject_cast<LsColJob *>(sender());
+
+        Q_ASSERT(job);
+        if (!job) {
+            qCWarning(lcShellExtServer) << "finishedWithError is not called by LsColJob's signal!";
+            return;
+        }
+
+        const auto folderAlias = job->property(folderAliasPropertyKey).toString();
+
+        Q_ASSERT(!folderAlias.isEmpty());
+        if (folderAlias.isEmpty()) {
+            qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
+            return;
+        }
+        const auto folder = FolderMan::instance()->folder(folderAlias);
+
+        if (!folder) {
+            qCWarning(lcShellExtServer) << "No 'folder' found for folderAlias!";
+            return;
+        }
+
+        SyncJournalFileRecord record;
+        const auto filePathAdjusted = QString(name).remove(folder->accountState()->account()->davPath());
+        if (!folder || !folder->journalDb()->getFileRecord(filePathAdjusted, &record) || !record.isValid()) {
+            emit fetchPermissionsJobFinished(folderAlias);
+            return;
+        }
+        const auto isIncomingShare = (properties.contains(QStringLiteral("permissions"))
+             && RemotePermissions::fromServerString(properties[QStringLiteral("permissions")]).hasPermission(OCC::RemotePermissions::IsShared));
+
+        const auto isMyShare = (properties.contains(QStringLiteral("share-types")) && !properties[QStringLiteral("share-types")].isEmpty());
+
+        const auto timeStamp = QDateTime::currentMSecsSinceEpoch();
+
+        record._isIncomingShare = isIncomingShare;
+        record._lastShareStateFetchedTimestmap = timeStamp;
+
+        record._isShared = isIncomingShare || isMyShare;
+        record._lastShareStateFetchedTimestmap = timeStamp;
+
+        if (!folder->journalDb()->setFileRecord(record)) {
+            qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
+            emit fetchPermissionsJobFinished(folderAlias);
+            return;
+        }
     });
 
     QObject::connect(lsColJob, &LsColJob::finishedWithError, this, [this](QNetworkReply *reply) {
-        int a = 5;
-        a = 6;
+        const auto job = qobject_cast<LsColJob *>(sender());
+
+        Q_ASSERT(job);
+        if (!job) {
+            qCWarning(lcShellExtServer) << "finishedWithError is not called by LsColJob's signal!";
+            return;
+        }
+
+        const auto folderAlias = job->property(folderAliasPropertyKey).toString();
+
+        Q_ASSERT(!folderAlias.isEmpty());
+        if (folderAlias.isEmpty()) {
+            qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
+            return;
+        }
+        emit fetchPermissionsJobFinished(folderAlias);
     });
+
     QObject::connect(lsColJob, &LsColJob::finishedWithoutError, this, [this]() {
-        int a = 5;
-        a = 6;
+        const auto job = qobject_cast<LsColJob *>(sender());
+
+        Q_ASSERT(job);
+        if (!job) {
+            qCWarning(lcShellExtServer) << "finishedWithError is not called by LsColJob's signal!";
+            return;
+        }
+
+        const auto folderAlias = job->property(folderAliasPropertyKey).toString();
+
+        Q_ASSERT(!folderAlias.isEmpty());
+        if (folderAlias.isEmpty()) {
+            qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
+            return;
+        }
+        emit fetchPermissionsJobFinished(folderAlias);
     });
+
     lsColJob->start();
-
-    const auto propfindJob = new PropfindJob(folder->accountState()->account(), QDir::cleanPath(folder->remotePath() + filePathRelative));
-    propfindJob->setProperties({"http://owncloud.org/ns:permissions", "http://owncloud.org/ns:share-types"});
-    propfindJob->setProperty(folderAliasPropertyKey, customStateRequestInfo.folderAlias);
-    connect(propfindJob, &PropfindJob::result, this, &ShellExtensionsServer::slotPermissionsFetched);
-    connect(propfindJob, &PropfindJob::finishedWithError, this, &ShellExtensionsServer::slotPermissionsFetchError);
-
-    if (!_runningFetchShareJobsForPaths.contains(filePathRelative)) {
-        _runningFetchShareJobsForPaths.push_back(filePathRelative);
-        qCInfo(lcShellExtServer) << "Started PropfindJob for item: " << filePathRelative;
-        propfindJob->start();
-    } else {
-        qCInfo(lcShellExtServer) << "PropfindJob is already running for path: " << filePathRelative;
-    }
 }
 
 void ShellExtensionsServer::processThumbnailRequest(QLocalSocket *socket, const ThumbnailRequestInfo &thumbnailRequestInfo)
@@ -278,77 +335,6 @@ void ShellExtensionsServer::slotNewConnection()
     qCWarning(lcShellExtServer) << "Invalid message received from shell extension: " << message;
     sendEmptyDataAndCloseSession(socket);
     return;
-}
-
-void ShellExtensionsServer::slotPermissionsFetched(const QVariantMap &values)
-{
-    const auto job = qobject_cast<PropfindJob *>(sender());
-
-    Q_ASSERT(job);
-    if (!job) {
-        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotPermissionsFetched is not called by PropfindJob's signal!";
-        return;
-    }
-
-    const auto filePath = job->path();
-
-    const auto filePathAdjusted = filePath.startsWith(QLatin1Char('/')) ? QString(filePath).remove(0, 1) : filePath;
-
-    _runningFetchShareJobsForPaths.removeAll(filePathAdjusted);
-
-    const auto folderAlias = job->property(folderAliasPropertyKey).toString();
-
-    Q_ASSERT(!folderAlias.isEmpty());
-    if (folderAlias.isEmpty()) {
-        qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
-        return;
-    }
-
-    const auto folder = FolderMan::instance()->folder(folderAlias);
-
-    Q_ASSERT(folder);
-    if (!folder) {
-        qCWarning(lcShellExtServer) << "folder not found for folderAlias: " << folderAlias;
-        emit fetchPermissionsJobFinished(folderAlias);
-        return;
-    }
-
-    SyncJournalFileRecord record;
-    if (!folder || !folder->journalDb()->getFileRecord(filePathAdjusted, &record) || !record.isValid()) {
-        emit fetchPermissionsJobFinished(folderAlias);
-        return;
-    }
-    record._isShared = values.contains(QStringLiteral("permissions"))
-        && RemotePermissions::fromServerString(values[QStringLiteral("permissions")].toString()).hasPermission(OCC::RemotePermissions::IsShared);
-
-    record._lastShareStateFetchedTimestmap = QDateTime::currentMSecsSinceEpoch();
-
-    if (!folder->journalDb()->setFileRecord(record)) {
-        qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
-        emit fetchPermissionsJobFinished(folderAlias);
-        return;
-    }
-
-    qCInfo(lcShellExtServer) << "Succeeded PropfindJob for path: " << filePathAdjusted;
-    emit fetchPermissionsJobFinished(folderAlias);
-}
-
-void ShellExtensionsServer::slotPermissionsFetchError(QNetworkReply *reply)
-{
-    const auto job = qobject_cast<PropfindJob *>(sender());
-
-    Q_ASSERT(job);
-    if (!job) {
-        qCWarning(lcShellExtServer) << "ShellExtensionsServer::slotSharesFetched is not called by PropfindJob's signal!";
-        return;
-    }
-
-    const auto filePath = job->path();
-
-    _runningFetchShareJobsForPaths.removeAll(filePath);
-
-    emit fetchPermissionsJobFinished(filePath);
-    qCWarning(lcShellExtServer) << "Failed PropfindJob for filePath: " << filePath;
 }
 
 void ShellExtensionsServer::parseCustomStateRequest(QLocalSocket *socket, const QVariantMap &message)

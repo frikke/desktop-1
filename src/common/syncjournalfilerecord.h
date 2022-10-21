@@ -83,6 +83,8 @@ public:
     SyncJournalFileLockInfo _lockstate;
     bool _isShared = false;
     qint64 _lastShareStateFetchedTimestmap = 0;
+    bool _isIncomingShare = false;
+    qint64 _lastIncomingShareStateFetchedTimestmap = 0;
 };
 
 bool OCSYNC_EXPORT

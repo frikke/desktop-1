@@ -55,6 +55,7 @@ public:
 
 signals:
     void fetchPermissionsJobFinished(const QString &folderAlias);
+    void directoryListingIterationFinished(const QString &folderAlias);
 
 private:
     void sendJsonMessageWithVersion(QLocalSocket *socket, const QVariantMap &message);
@@ -68,8 +69,6 @@ private:
 
 private slots:
     void slotNewConnection();
-    void slotPermissionsFetched(const QVariantMap &values);
-    void slotPermissionsFetchError(QNetworkReply *reply);
 
 private:
     QLocalServer _localServer;
