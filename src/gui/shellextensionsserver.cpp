@@ -19,7 +19,6 @@
 #include <libsync/vfs/cfapi/shellext/configvfscfapishellext.h>
 #include "folder.h"
 #include "folderman.h"
-#include "ocssharejob.h"
 #include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -131,7 +130,7 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
     }
 
     {
-        _customStateSocketConnections.insert(socket->socketDescriptor(), QObject::connect(this, &ShellExtensionsServer::fetchPermissionsJobFinished, [this, socket, filePathRelative, composeMessageReplyFromRecord](const QString &folderAlias) {
+        _customStateSocketConnections.insert(socket->socketDescriptor(), QObject::connect(this, &ShellExtensionsServer::directoryListingIterationFinished, [this, socket, filePathRelative, composeMessageReplyFromRecord](const QString &folderAlias) {
             {
                 const auto connection = _customStateSocketConnections[socket->socketDescriptor()];
                 if (connection) {
@@ -200,7 +199,7 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
         SyncJournalFileRecord record;
         const auto filePathAdjusted = QString(name).remove(folder->accountState()->account()->davPath());
         if (!folder || !folder->journalDb()->getFileRecord(filePathAdjusted, &record) || !record.isValid()) {
-            emit fetchPermissionsJobFinished(folderAlias);
+            emit directoryListingIterationFinished(folderAlias);
             return;
         }
         const auto isIncomingShare = (properties.contains(QStringLiteral("permissions"))
@@ -208,17 +207,14 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
 
         const auto isMyShare = (properties.contains(QStringLiteral("share-types")) && !properties[QStringLiteral("share-types")].isEmpty());
 
-        const auto timeStamp = QDateTime::currentMSecsSinceEpoch();
-
-        record._isIncomingShare = isIncomingShare;
-        record._lastShareStateFetchedTimestmap = timeStamp;
+        record._isMyShare = isMyShare;
 
         record._isShared = isIncomingShare || isMyShare;
-        record._lastShareStateFetchedTimestmap = timeStamp;
+        record._lastShareStateFetchedTimestmap = QDateTime::currentMSecsSinceEpoch();
 
         if (!folder->journalDb()->setFileRecord(record)) {
             qCWarning(lcShellExtServer) << "Could not set file record for path: " << record._path;
-            emit fetchPermissionsJobFinished(folderAlias);
+            emit directoryListingIterationFinished(folderAlias);
             return;
         }
     });
@@ -239,7 +235,7 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
             qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
             return;
         }
-        emit fetchPermissionsJobFinished(folderAlias);
+        emit directoryListingIterationFinished(folderAlias);
     });
 
     QObject::connect(lsColJob, &LsColJob::finishedWithoutError, this, [this]() {
@@ -258,7 +254,7 @@ void ShellExtensionsServer::processCustomStateRequest(QLocalSocket *socket, cons
             qCWarning(lcShellExtServer) << "No 'folderAlias' set for OcsShareJob's instance!";
             return;
         }
-        emit fetchPermissionsJobFinished(folderAlias);
+        emit directoryListingIterationFinished(folderAlias);
     });
 
     lsColJob->start();

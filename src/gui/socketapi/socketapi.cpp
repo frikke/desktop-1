@@ -588,7 +588,7 @@ void SocketApi::command_SHARE(const QString &localFile, SocketListener *listener
     processShareRequest(localFile, listener, ShareDialogStartPage::UsersAndGroups);
 }
 
-void SocketApi::command_LEAVE_SHARE(const QString &localFile, SocketListener *listener)
+void SocketApi::command_LEAVESHARE(const QString &localFile, SocketListener *listener)
 {
     processLeaveShareRequest(localFile, listener);
 }
@@ -1055,8 +1055,8 @@ void SocketApi::sendSharingContextMenuOptions(const FileData &fileData, SocketLi
     if (!capabilities.shareAPI() || !(theme->userGroupSharing() || (theme->linkSharing() && capabilities.sharePublicLink())))
         return;
 
-    if (record._isIncomingShare) {
-        listener->sendMessage(QLatin1String("MENU_ITEM:LEAVE_SHARE") + flagString + tr("Leave this share"));
+    if (record._isShared && !record._isMyShare) {
+        listener->sendMessage(QLatin1String("MENU_ITEM:LEAVESHARE") + flagString + tr("Leave this share"));
     }
 
     // If sharing is globally disabled, do not show any sharing entries.

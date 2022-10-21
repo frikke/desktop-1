@@ -116,7 +116,7 @@ private:
     // The context menu actions
     Q_INVOKABLE void command_ACTIVITY(const QString &localFile, SocketListener *listener);
     Q_INVOKABLE void command_SHARE(const QString &localFile, SocketListener *listener);
-    Q_INVOKABLE void command_LEAVE_SHARE(const QString &localFile, SocketListener *listener);
+    Q_INVOKABLE void command_LEAVESHARE(const QString &localFile, SocketListener *listener);
     Q_INVOKABLE void command_MANAGE_PUBLIC_LINKS(const QString &localFile, SocketListener *listener);
     Q_INVOKABLE void command_COPY_PUBLIC_LINK(const QString &localFile, SocketListener *listener);
     Q_INVOKABLE void command_COPY_PRIVATE_LINK(const QString &localFile, SocketListener *listener);

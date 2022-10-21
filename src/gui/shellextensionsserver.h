@@ -54,7 +54,6 @@ public:
     void setIsSharedInvalidationInterval(qint64 interval);
 
 signals:
-    void fetchPermissionsJobFinished(const QString &folderAlias);
     void directoryListingIterationFinished(const QString &folderAlias);
 
 private:
