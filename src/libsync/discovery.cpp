@@ -493,7 +493,7 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
             item->_instruction = CSYNC_INSTRUCTION_ERROR;
             _childIgnored = true;
             item->_errorString = tr("Server reported no %1").arg(missingData.join(QLatin1String(", ")));
-            qCWarning(lcDisco) << QString("Server reported no %1").arg(missingData.join(QLatin1String(", ")));
+            qCWarning(lcDisco) << QString("[DEBUG_ETAG] Server reported no %1").arg(missingData.join(QLatin1String(", ")));
             emit _discoveryData->itemDiscovered(item);
             return;
         }
