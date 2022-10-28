@@ -385,10 +385,10 @@ void LsColJob::start()
     buf->setData(xml);
     buf->open(QIODevice::ReadOnly);
     if (_url.isValid()) {
-        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << _url.toString() << " with body: " << buf;
+        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << _url.toString() << " with body: " << xml;
         sendRequest("PROPFIND", _url, req, buf);
     } else {
-        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << makeDavUrl(path()).toString() << " with body: " << buf;
+        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << makeDavUrl(path()).toString() << " with body: " << xml;
         sendRequest("PROPFIND", makeDavUrl(path()), req, buf);
     }
     AbstractNetworkJob::start();
