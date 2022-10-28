@@ -493,6 +493,7 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
             item->_instruction = CSYNC_INSTRUCTION_ERROR;
             _childIgnored = true;
             item->_errorString = tr("Server reported no %1").arg(missingData.join(QLatin1String(", ")));
+            qCWarning(lcDisco) << QString("Server reported no %1").arg(missingData.join(QLatin1String(", ")));
             emit _discoveryData->itemDiscovered(item);
             return;
         }
@@ -505,7 +506,7 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
         const bool isVirtualE2EePlaceholder = isDbEntryAnE2EePlaceholder && serverEntry.size >= Constants::e2EeTagSize;
         const qint64 sizeOnServer = isVirtualE2EePlaceholder ? serverEntry.size - Constants::e2EeTagSize : serverEntry.size;
         const bool metaDataSizeNeedsUpdateForE2EeFilePlaceholder = isVirtualE2EePlaceholder && dbEntry._fileSize == serverEntry.size;
-
+        qCInfo(lcDisco) << "[DEBUG_ETAG] Discovering dbEntry.path(): " << dbEntry.path() << " serverEntry.name: " << serverEntry.name << " dbEntry._etag: " << dbEntry._etag << " serverEntry.etag: " << serverEntry.etag;
         if (serverEntry.isDirectory != dbEntry.isDirectory()) {
             // If the type of the entity changed, it's like NEW, but
             // needs to delete the other entity first.

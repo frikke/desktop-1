@@ -222,7 +222,7 @@ LsColXMLParser::LsColXMLParser() = default;
 
 bool LsColXMLParser::parse(const QByteArray &xml, QHash<QString, ExtraFolderInfo> *fileInfo, const QString &expectedPath)
 {
-    qCInfo(lcLsColJob) << "LsColXMLParser::parse expectedPath: " << expectedPath << " xml: " << xml;
+    qCInfo(lcLsColJob) << "[DEBUG_ETAG] LsColXMLParser::parse expectedPath: " << expectedPath << " xml: " << xml;
     // Parse DAV response
     QXmlStreamReader reader(xml);
     reader.addExtraNamespaceDeclaration(QXmlStreamNamespaceDeclaration("d", "DAV:"));
@@ -287,7 +287,7 @@ bool LsColXMLParser::parse(const QByteArray &xml, QHash<QString, ExtraFolderInfo
             }
             currentTmpProperties.insert(reader.name().toString(), propertyContent);
             if (name == "getetag") {
-                qCInfo(lcLsColJob) << " currentHref is: " << currentHref << " getetag is: " << propertyContent;
+                qCInfo(lcLsColJob) << "[DEBUG_ETAG] currentHref is: " << currentHref << " getetag is: " << propertyContent;
             }
         }
 
@@ -385,10 +385,10 @@ void LsColJob::start()
     buf->setData(xml);
     buf->open(QIODevice::ReadOnly);
     if (_url.isValid()) {
-        qCInfo(lcLsColJob) << "Sending PROPFIND request to url: " << _url.toString() << " with body: " << buf;
+        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << _url.toString() << " with body: " << buf;
         sendRequest("PROPFIND", _url, req, buf);
     } else {
-        qCInfo(lcLsColJob) << "Sending PROPFIND request to url: " << makeDavUrl(path()).toString() << " with body: " << buf;
+        qCInfo(lcLsColJob) << "[DEBUG_ETAG] Sending PROPFIND request to url: " << makeDavUrl(path()).toString() << " with body: " << buf;
         sendRequest("PROPFIND", makeDavUrl(path()), req, buf);
     }
     AbstractNetworkJob::start();
@@ -408,7 +408,7 @@ bool LsColJob::finished()
                                   contentType.contains("text/xml; charset=\"utf-8\"");
 
     
-    qCInfo(lcLsColJob) << "LSCOL of" << reply()->request().url() << "FINISHED WITH STATUS" << replyStatusString() << " and contentType: " << contentType;
+    qCInfo(lcLsColJob) << "[DEBUG_ETAG] LSCOL of" << reply()->request().url() << "FINISHED WITH STATUS" << replyStatusString() << " and contentType: " << contentType;
 
     if (httpCode == 207 && validContentType) {
         LsColXMLParser parser;
