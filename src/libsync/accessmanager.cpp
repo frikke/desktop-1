@@ -20,7 +20,11 @@
 #include <QSslConfiguration>
 #include <QNetworkCookie>
 #include <QNetworkCookieJar>
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 #include <QNetworkConfiguration>
+#else
+#include <QNetworkInformation>
+#endif
 #include <QUuid>
 
 #include "cookiejar.h"
@@ -42,7 +46,7 @@ AccessManager::AccessManager(QObject *parent)
     setProxy(proxy);
 #endif
 
-#ifndef Q_OS_LINUX
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0) && !defined(Q_OS_LINUX)
     // Atempt to workaround for https://github.com/owncloud/client/issues/3969
     setConfiguration(QNetworkConfiguration());
 #endif
