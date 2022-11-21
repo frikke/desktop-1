@@ -35,7 +35,12 @@
 #include <QScopeGuard>
 #include <QRandomGenerator>
 
+#if QT_VERSION >= QT_VERSION_CHECK(6, 0, 0)
+#include <qt6keychain/keychain.h>
+#else
 #include <qt5keychain/keychain.h>
+#endif
+
 #include <common/utility.h>
 #include <common/constants.h>
 

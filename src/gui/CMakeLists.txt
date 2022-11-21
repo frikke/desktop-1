@@ -362,10 +362,6 @@ set( final_src
     ${3rdparty_MOC}
 )
 
-if(Qt5Keychain_FOUND)
-    list(APPEND libsync_LINK_TARGETS qt5keychain)
-endif()
-
 # add executable icon on windows and osx
 include(GenerateIconsUtils)
 
