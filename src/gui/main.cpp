@@ -58,13 +58,6 @@ int main(int argc, char **argv)
     Q_INIT_RESOURCE(resources);
     Q_INIT_RESOURCE(theme);
 
-    // Work around a bug in KDE's qqc2-desktop-style which breaks
-    // buttons with icons not based on a name, by forcing a style name
-    // the platformtheme plugin won't try to force qqc2-desktops-style
-    // anymore.
-    // Can be removed once the bug in qqc2-desktop-style is gone.
-    QQuickStyle::setStyle("Default");
-
     // OpenSSL 1.1.0: No explicit initialisation or de-initialisation is necessary.
 #ifdef Q_OS_MAC
     Mac::CocoaInitializer cocoaInit; // RIIA
