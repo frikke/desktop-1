@@ -39,6 +39,7 @@
 #include <QWidgetAction>
 #include <QPainter>
 #include <QPainterPath>
+#include <QActionGroup>
 
 namespace {
 const QString TOOLBAR_CSS()
