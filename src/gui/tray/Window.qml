@@ -242,7 +242,6 @@ ApplicationWindow {
                     Layout.preferredHeight: Style.trayWindowHeaderHeight
                     display:                AbstractButton.IconOnly
                     flat:                   true
-                    palette: Style.systemPalette
 
                     Accessible.role: Accessible.ButtonMenu
                     Accessible.name: qsTr("Current account")
@@ -270,7 +269,6 @@ ApplicationWindow {
                         width: (Style.currentAccountButtonWidth - 2)
                         height: Math.min(implicitHeight, maxMenuHeight)
                         closePolicy: Menu.CloseOnPressOutsideParent | Menu.CloseOnEscape
-                        palette: Style.palette
 
                         background: Rectangle {
                             border.color: Style.menuBorder
@@ -319,7 +317,6 @@ ApplicationWindow {
                             id: addAccountButton
                             height: Style.addAccountButtonHeight
                             hoverEnabled: true
-                            palette: Theme.systemPalette
 
                             background: Item {
                                 height: parent.height
