@@ -6,6 +6,8 @@
  */
 
 #include <QtTest>
+#include <QTextCodec>
+
 #include "syncenginetestutils.h"
 #include <syncengine.h>
 

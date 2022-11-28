@@ -13,8 +13,9 @@ macro(nextcloud_build_test test_class)
       testutils
       nextcloudCore
       cmdCore
-      Qt5::Test
-      Qt5::Quick
+      Qt::Test
+      Qt::Quick
+      Qt::Core5Compat
     )
 
     if (WIN32)
@@ -52,6 +53,7 @@ macro(nextcloud_add_test test_class)
       cmdCore
       Qt::Test
       Qt::Quick
+      Qt::Core5Compat
     )
 
     if (WIN32)
@@ -103,6 +105,7 @@ macro(nextcloud_add_benchmark test_class)
       Qt::Test
       Qt::Xml
       Qt::Network
+      Qt::Core5Compat
     )
 
     IF(BUILD_UPDATER)
