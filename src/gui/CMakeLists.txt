@@ -3,13 +3,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Svg Qml Quick Qui
 find_package(KF5Archive REQUIRED)
 
 if(QUICK_COMPILER)
-    if (${QT_VERSION_MAJOR} STREQUAL "6")
-#        find_package(Qt6 COMPONENTS QuickCompiler)
-#        set_package_properties(Qt6QuickCompiler PROPERTIES
-#                DESCRIPTION "Compile QML at build time"
-#                TYPE REQUIRED
-#        )
-    else()
+    if (${QT_VERSION_MAJOR} STREQUAL "5")
         set(REQUIRED_QT_VERSION "5.15.0")
         find_package(Qt${QT_VERSION_MAJOR} ${REQUIRED_QT_VERSION} CONFIG REQUIRED QuickCompiler)
         set_package_properties(Qt5QuickCompiler PROPERTIES
