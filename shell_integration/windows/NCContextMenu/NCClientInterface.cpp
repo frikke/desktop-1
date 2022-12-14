@@ -27,13 +27,30 @@
 #include <iterator>
 #include <unordered_set>
 
+#include <fstream>
+#include <locale>
+#include <codecvt>
+
 using namespace std;
 
 #define PIPE_TIMEOUT  5*1000 //ms
 
+std::string ws2s(const std::wstring &wstr)
+{
+    using convert_typeX = std::codecvt_utf8<wchar_t>;
+    std::wstring_convert<convert_typeX, wchar_t> converterX;
+
+    return converterX.to_bytes(wstr);
+}
+
 NCClientInterface::ContextMenuInfo NCClientInterface::FetchInfo(const std::wstring &files)
 {
     auto pipename = CommunicationSocket::DefaultPipePath();
+
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCClientInterface " << "FetchInfo " << "pipename: " << ws2s(pipename) << std::endl;
 
     CommunicationSocket socket;
     if (!WaitNamedPipe(pipename.data(), PIPE_TIMEOUT)) {
@@ -80,6 +97,11 @@ NCClientInterface::ContextMenuInfo NCClientInterface::FetchInfo(const std::wstri
 void NCClientInterface::SendRequest(const wchar_t *verb, const std::wstring &path)
 {
     auto pipename = CommunicationSocket::DefaultPipePath();
+
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCClientInterface " << "SendRequest " << "pipename: " << ws2s(pipename) << std::endl;
 
     CommunicationSocket socket;
     if (!WaitNamedPipe(pipename.data(), PIPE_TIMEOUT)) {

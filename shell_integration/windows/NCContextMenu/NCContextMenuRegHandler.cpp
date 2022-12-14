@@ -16,6 +16,8 @@
 #include "RegDelnode.h"
 #include <strsafe.h>
 #include <objbase.h>
+#include <iostream>
+#include <fstream>
 
 namespace {
 
@@ -80,6 +82,11 @@ HRESULT GetHKCRRegistryKeyAndValue(PCWSTR pszSubKey, PCWSTR pszValueName, PWSTR 
 
 HRESULT NCContextMenuRegHandler::RegisterInprocServer(PCWSTR pszModule, const CLSID& clsid, PCWSTR pszFriendlyName, PCWSTR pszThreadModel)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuRegHandler " << "RegisterInprocServer" << std::endl;
+
     if (!pszModule || !pszThreadModel)
     {
         return E_INVALIDARG;
@@ -128,6 +135,11 @@ HRESULT NCContextMenuRegHandler::RegisterInprocServer(PCWSTR pszModule, const CL
 
 HRESULT NCContextMenuRegHandler::UnregisterInprocServer(const CLSID& clsid)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuRegHandler " << "UnregisterInprocServer" << std::endl;
+
     HRESULT hr = S_OK;
 
     wchar_t szCLSID[MAX_PATH];
@@ -149,6 +161,11 @@ HRESULT NCContextMenuRegHandler::UnregisterInprocServer(const CLSID& clsid)
 HRESULT NCContextMenuRegHandler::RegisterShellExtContextMenuHandler(
     PCWSTR pszFileType, const CLSID& clsid, PCWSTR pszFriendlyName)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuRegHandler " << "RegisterShellExtContextMenuHandler" << std::endl;
+
     if (!pszFileType)
     {
         return E_INVALIDARG;
@@ -193,6 +210,11 @@ HRESULT NCContextMenuRegHandler::RegisterShellExtContextMenuHandler(
 HRESULT NCContextMenuRegHandler::UnregisterShellExtContextMenuHandler(
     PCWSTR pszFileType, PCWSTR pszFriendlyName)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuRegHandler " << "UnregisterShellExtContextMenuHandler" << std::endl;
+
     if (!pszFileType)
     {
         return E_INVALIDARG;

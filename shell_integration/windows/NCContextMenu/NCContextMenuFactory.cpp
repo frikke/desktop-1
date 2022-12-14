@@ -16,6 +16,8 @@
 #include "NCContextMenu.h"
 #include <new>
 #include <Shlwapi.h>
+#include <fstream>
+#include <iostream>
 #pragma comment(lib, "shlwapi.lib")
 
 
@@ -24,11 +26,21 @@ extern long g_cDllRef;
 
 NCContextMenuFactory::NCContextMenuFactory() : m_cRef(1)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "NCContextMenuFactory" << std::endl;
+
     InterlockedIncrement(&g_cDllRef);
 }
 
 NCContextMenuFactory::~NCContextMenuFactory()
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "~NCContextMenuFactory" << std::endl;
+
     InterlockedDecrement(&g_cDllRef);
 }
 
@@ -37,17 +49,32 @@ NCContextMenuFactory::~NCContextMenuFactory()
 
 IFACEMETHODIMP NCContextMenuFactory::QueryInterface(REFIID riid, void **ppv)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "QueryInterface" << std::endl;
+
     static const QITAB qit[] =  { QITABENT(NCContextMenuFactory, IClassFactory), { 0 }, };
     return QISearch(this, qit, riid, ppv);
 }
 
 IFACEMETHODIMP_(ULONG) NCContextMenuFactory::AddRef()
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "AddRef" << std::endl;
+
     return InterlockedIncrement(&m_cRef);
 }
 
 IFACEMETHODIMP_(ULONG) NCContextMenuFactory::Release()
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "Release" << std::endl;
+
     ULONG cRef = InterlockedDecrement(&m_cRef);
     if (0 == cRef) {
         delete this;
@@ -60,6 +87,11 @@ IFACEMETHODIMP_(ULONG) NCContextMenuFactory::Release()
 
 IFACEMETHODIMP NCContextMenuFactory::CreateInstance(IUnknown *pUnkOuter, REFIID riid, void **ppv)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "CreateInstance" << std::endl;
+
     HRESULT hr = CLASS_E_NOAGGREGATION;
 
     // pUnkOuter is used for aggregation. We do not support it in the sample.
@@ -80,6 +112,11 @@ IFACEMETHODIMP NCContextMenuFactory::CreateInstance(IUnknown *pUnkOuter, REFIID 
 
 IFACEMETHODIMP NCContextMenuFactory::LockServer(BOOL fLock)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenuFactory " << "LockServer" << std::endl;
+
     if (fLock)  {
         InterlockedIncrement(&g_cDllRef);
     } else {

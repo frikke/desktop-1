@@ -21,6 +21,9 @@
 #include <StringUtil.h>
 #include <strsafe.h>
 
+#include <fstream>
+#include <locale>
+
 extern long g_cDllRef;
 
 NCContextMenu::NCContextMenu(void) 
@@ -39,6 +42,11 @@ NCContextMenu::~NCContextMenu(void)
 // Query to the interface the component supported.
 IFACEMETHODIMP NCContextMenu::QueryInterface(REFIID riid, void **ppv)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "QueryInterface" << std::endl;
+
     static const QITAB qit[] =
     {
         QITABENT(NCContextMenu, IContextMenu),
@@ -51,12 +59,21 @@ IFACEMETHODIMP NCContextMenu::QueryInterface(REFIID riid, void **ppv)
 // Increase the reference count for an interface on an object.
 IFACEMETHODIMP_(ULONG) NCContextMenu::AddRef()
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "AddRef" << std::endl;
     return InterlockedIncrement(&m_cRef);
 }
 
 // Decrease the reference count for an interface on an object.
 IFACEMETHODIMP_(ULONG) NCContextMenu::Release()
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "Release" << std::endl;
+
     ULONG cRef = InterlockedDecrement(&m_cRef);
     if (0 == cRef) {
         delete this;
@@ -74,6 +91,11 @@ IFACEMETHODIMP_(ULONG) NCContextMenu::Release()
 IFACEMETHODIMP NCContextMenu::Initialize(
     LPCITEMIDLIST, LPDATAOBJECT pDataObj, HKEY)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "Initialize" << std::endl;
+
     m_selectedFiles.clear();
 
     if (!pDataObj) {
@@ -129,6 +151,11 @@ void InsertSeperator(HMENU hMenu, UINT indexMenu)
 
 IFACEMETHODIMP NCContextMenu::QueryContextMenu(HMENU hMenu, UINT indexMenu, UINT idCmdFirst, UINT idCmdLast, UINT uFlags)
 {
+    const auto appdataPath = std::string{getenv("APPDATA")};
+    std::ofstream logOutput(appdataPath + "\\Nextcloud\\shellext.log", std::ios::out | std::ios::app);
+
+    logOutput << "NCContextMenu " << "QueryContextMenu" << std::endl;
+
     // If uFlags include CMF_DEFAULTONLY then we should not do anything.
     if (CMF_DEFAULTONLY & uFlags)
     {
