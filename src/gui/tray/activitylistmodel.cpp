@@ -425,16 +425,6 @@ void ActivityListModel::startFetchJob()
     job->start();
 }
 
-void ActivityListModel::setFinalList(const ActivityList &finalList)
-{
-    _finalList = finalList;
-}
-
-const ActivityList &ActivityListModel::finalList() const
-{
-    return _finalList;
-}
-
 int ActivityListModel::currentItem() const
 {
     return _currentItem;

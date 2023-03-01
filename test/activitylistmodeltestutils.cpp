@@ -432,7 +432,7 @@ void TestingALM::startFetchJob()
 
 void TestingALM::slotProcessReceivedActivities()
 {
-    auto finalListCopy = finalList();
+    auto finalListCopy = _finalList;
     for (int i = _numRowsPrev; i < rowCount(); ++i) {
         const auto modelIndex = index(i, 0);
         auto activity = finalListCopy.at(modelIndex.row());
@@ -450,10 +450,9 @@ void TestingALM::slotProcessReceivedActivities()
         }
 
         finalListCopy[modelIndex.row()] = activity;
-        qDebug() << activity._subject << activity._subjectDisplay;
     }
 
-    setFinalList(finalListCopy);
+    _finalList = finalListCopy;
 
     setAndRefreshCurrentlyFetching(false);
     emit activitiesProcessed();
