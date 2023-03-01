@@ -21,6 +21,10 @@
 
 class QJsonDocument;
 
+namespace ActivityListModelTestUtils {
+class TestingALM;
+}
+
 namespace OCC {
 
 Q_DECLARE_LOGGING_CATEGORY(lcActivity)
@@ -191,6 +195,8 @@ private:
     bool _hideOldActivities = true;
 
     static constexpr quint32 MaxActionButtons = 3;
+
+    friend class ActivityListModelTestUtils::TestingALM;
 };
 }
 
