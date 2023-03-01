@@ -20,7 +20,7 @@
 #include <QJsonObject>
 
 #include "syncfileitem.h"
-#include "folder.h"
+#include "syncresult.h"
 #include "account.h"
 
 namespace OCC {
