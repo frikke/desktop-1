@@ -22,7 +22,7 @@ The following parameters are supported:
         (optional) path to a remote subfolder when creating an account via command-line. e.g. If the server has folders "/Photos", "/Documents", "/Music" you can pass "/Music" and then this folder will get set up as remote root.
 
 ``--serverurl``
-        (required) a server URL to use when creating an account via command-line.
+        (required) a server URL to use when creating an account via command-line. (NOTE: There is another parameter supported by Nextcloud desktop client ``--overrideserverurl`` but it SHOULD NOT be used here as it is intended for setup via UI with wizard)
 
 Examples:
 
