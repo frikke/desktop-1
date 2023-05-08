@@ -131,7 +131,6 @@ Page {
     }
 
     function resetMenu() {
-        moreMenu.close();
 
         resetNoteField();
         resetPasswordField();
@@ -256,7 +255,7 @@ Page {
         clip: true
 
         ColumnLayout {
-            id: moreMenu
+            id: scrollContentsColumn
 
             property int rowIconWidth: 16
             property int indicatorItemWidth: 20
@@ -268,12 +267,12 @@ Page {
             RowLayout {
                 Layout.fillWidth: true
                 height: visible ? implicitHeight : 0
-                spacing: moreMenu.indicatorSpacing
+                spacing: scrollContentsColumn.indicatorSpacing
 
                 visible: root.isLinkShare
 
                 Image {
-                    Layout.preferredWidth: moreMenu.indicatorItemWidth
+                    Layout.preferredWidth: scrollContentsColumn.indicatorItemWidth
                     Layout.fillHeight: true
 
                     verticalAlignment: Image.AlignVCenter
@@ -281,8 +280,8 @@ Page {
                     fillMode: Image.Pad
 
                     source: "image://svgimage-custom-color/edit.svg/" + Style.menuBorder
-                    sourceSize.width: moreMenu.rowIconWidth
-                    sourceSize.height: moreMenu.rowIconWidth
+                    sourceSize.width: scrollContentsColumn.rowIconWidth
+                    sourceSize.height: scrollContentsColumn.rowIconWidth
                 }
 
                 NCInputTextField {
@@ -316,10 +315,10 @@ Page {
                 active: !root.isFolderItem && !root.isEncryptedItem
                 visible: active
                 sourceComponent: CheckBox {
-                    spacing: moreMenu.indicatorSpacing
-                    padding: moreMenu.itemPadding
-                    indicator.width: moreMenu.indicatorItemWidth
-                    indicator.height: moreMenu.indicatorItemWidth
+                    spacing: scrollContentsColumn.indicatorSpacing
+                    padding: scrollContentsColumn.itemPadding
+                    indicator.width: scrollContentsColumn.indicatorItemWidth
+                    indicator.height: scrollContentsColumn.indicatorItemWidth
 
                     checkable: true
                     checked: root.editingAllowed
@@ -357,10 +356,10 @@ Page {
                         enabled: !root.isSharePermissionChangeInProgress
                         checked: root.currentPermissionMode === permissionMode
                         text: qsTr("View only")
-                        indicatorItemWidth: moreMenu.indicatorItemWidth
-                        indicatorItemHeight: moreMenu.indicatorItemWidth
-                        spacing: moreMenu.indicatorSpacing
-                        padding: moreMenu.itemPadding
+                        indicatorItemWidth: scrollContentsColumn.indicatorItemWidth
+                        indicatorItemHeight: scrollContentsColumn.indicatorItemWidth
+                        spacing: scrollContentsColumn.indicatorSpacing
+                        padding: scrollContentsColumn.itemPadding
                         onClicked: root.permissionModeChanged(permissionMode)
                     }
 
@@ -371,10 +370,10 @@ Page {
                         enabled: !root.isSharePermissionChangeInProgress
                         checked: root.currentPermissionMode === permissionMode
                         text: qsTr("Allow upload and editing")
-                        indicatorItemWidth: moreMenu.indicatorItemWidth
-                        indicatorItemHeight: moreMenu.indicatorItemWidth
-                        spacing: moreMenu.indicatorSpacing
-                        padding: moreMenu.itemPadding
+                        indicatorItemWidth: scrollContentsColumn.indicatorItemWidth
+                        indicatorItemHeight: scrollContentsColumn.indicatorItemWidth
+                        spacing: scrollContentsColumn.indicatorSpacing
+                        padding: scrollContentsColumn.itemPadding
                         onClicked: root.permissionModeChanged(permissionMode)
 
                         NCBusyIndicator {
@@ -392,10 +391,10 @@ Page {
                         enabled: !root.isSharePermissionChangeInProgress
                         checked: root.currentPermissionMode === permissionMode
                         text: qsTr("File drop (upload only)")
-                        indicatorItemWidth: moreMenu.indicatorItemWidth
-                        indicatorItemHeight: moreMenu.indicatorItemWidth
-                        spacing: moreMenu.indicatorSpacing
-                        padding: moreMenu.itemPadding
+                        indicatorItemWidth: scrollContentsColumn.indicatorItemWidth
+                        indicatorItemHeight: scrollContentsColumn.indicatorItemWidth
+                        spacing: scrollContentsColumn.indicatorSpacing
+                        padding: scrollContentsColumn.itemPadding
                         onClicked: root.permissionModeChanged(permissionMode)
                     }
                 }
@@ -413,10 +412,10 @@ Page {
                         anchors.left: parent.left
                         anchors.right: parent.right
 
-                        spacing: moreMenu.indicatorSpacing
-                        padding: moreMenu.itemPadding
-                        indicator.width: moreMenu.indicatorItemWidth
-                        indicator.height: moreMenu.indicatorItemWidth
+                        spacing: scrollContentsColumn.indicatorSpacing
+                        padding: scrollContentsColumn.itemPadding
+                        indicator.width: scrollContentsColumn.indicatorItemWidth
+                        indicator.height: scrollContentsColumn.indicatorItemWidth
                         checked: root.hideDownload
                         text: qsTr("Hide download")
                         enabled: !root.isHideDownloadInProgress
@@ -437,10 +436,10 @@ Page {
 
                 Layout.fillWidth: true
 
-                spacing: moreMenu.indicatorSpacing
-                padding: moreMenu.itemPadding
-                indicator.width: moreMenu.indicatorItemWidth
-                indicator.height: moreMenu.indicatorItemWidth
+                spacing: scrollContentsColumn.indicatorSpacing
+                padding: scrollContentsColumn.itemPadding
+                indicator.width: scrollContentsColumn.indicatorItemWidth
+                indicator.height: scrollContentsColumn.indicatorItemWidth
 
                 checkable: true
                 checked: root.passwordProtectEnabled
@@ -464,12 +463,12 @@ Page {
                 Layout.fillWidth: true
 
                 height: visible ? implicitHeight : 0
-                spacing: moreMenu.indicatorSpacing
+                spacing: scrollContentsColumn.indicatorSpacing
 
                 visible: root.passwordProtectEnabled
 
                 Image {
-                    Layout.preferredWidth: moreMenu.indicatorItemWidth
+                    Layout.preferredWidth: scrollContentsColumn.indicatorItemWidth
                     Layout.fillHeight: true
 
                     verticalAlignment: Image.AlignVCenter
@@ -477,8 +476,8 @@ Page {
                     fillMode: Image.Pad
 
                     source: "image://svgimage-custom-color/lock-https.svg/" + Style.menuBorder
-                    sourceSize.width: moreMenu.rowIconWidth
-                    sourceSize.height: moreMenu.rowIconWidth
+                    sourceSize.width: scrollContentsColumn.rowIconWidth
+                    sourceSize.height: scrollContentsColumn.rowIconWidth
                 }
 
                 NCInputTextField {
@@ -542,10 +541,10 @@ Page {
 
                 Layout.fillWidth: true
 
-                spacing: moreMenu.indicatorSpacing
-                padding: moreMenu.itemPadding
-                indicator.width: moreMenu.indicatorItemWidth
-                indicator.height: moreMenu.indicatorItemWidth
+                spacing: scrollContentsColumn.indicatorSpacing
+                padding: scrollContentsColumn.itemPadding
+                indicator.width: scrollContentsColumn.indicatorItemWidth
+                indicator.height: scrollContentsColumn.indicatorItemWidth
 
                 checkable: true
                 checked: root.expireDateEnabled
@@ -568,12 +567,12 @@ Page {
             RowLayout {
                 Layout.fillWidth: true
                 height: visible ? implicitHeight : 0
-                spacing: moreMenu.indicatorSpacing
+                spacing: scrollContentsColumn.indicatorSpacing
 
                 visible: root.expireDateEnabled
 
                 Image {
-                    Layout.preferredWidth: moreMenu.indicatorItemWidth
+                    Layout.preferredWidth: scrollContentsColumn.indicatorItemWidth
                     Layout.fillHeight: true
 
                     verticalAlignment: Image.AlignVCenter
@@ -581,8 +580,8 @@ Page {
                     fillMode: Image.Pad
 
                     source: "image://svgimage-custom-color/calendar.svg/" + Style.menuBorder
-                    sourceSize.width: moreMenu.rowIconWidth
-                    sourceSize.height: moreMenu.rowIconWidth
+                    sourceSize.width: scrollContentsColumn.rowIconWidth
+                    sourceSize.height: scrollContentsColumn.rowIconWidth
                 }
 
                 // QML dates are essentially JavaScript dates, which makes them very finicky and unreliable.
@@ -670,7 +669,6 @@ Page {
                     Layout.fillWidth: true
                     height: visible ? implicitHeight : 0
 
-
                     // We want all the internal benefits of the spinbox but don't actually want the
                     // buttons, so set an empty item as a dummy
                     up.indicator: Item {}
@@ -733,10 +731,10 @@ Page {
 
                 Layout.fillWidth: true
 
-                spacing: moreMenu.indicatorSpacing
-                padding: moreMenu.itemPadding
-                indicator.width: moreMenu.indicatorItemWidth
-                indicator.height: moreMenu.indicatorItemWidth
+                spacing: scrollContentsColumn.indicatorSpacing
+                padding: scrollContentsColumn.itemPadding
+                indicator.width: scrollContentsColumn.indicatorItemWidth
+                indicator.height: scrollContentsColumn.indicatorItemWidth
 
                 checkable: true
                 checked: root.noteEnabled
@@ -759,12 +757,12 @@ Page {
             RowLayout {
                 Layout.fillWidth: true
                 height: visible ? implicitHeight : 0
-                spacing: moreMenu.indicatorSpacing
+                spacing: scrollContentsColumn.indicatorSpacing
 
                 visible: root.noteEnabled
 
                 Image {
-                    Layout.preferredWidth: moreMenu.indicatorItemWidth
+                    Layout.preferredWidth: scrollContentsColumn.indicatorItemWidth
                     Layout.fillHeight: true
 
                     verticalAlignment: Image.AlignVCenter
@@ -772,8 +770,8 @@ Page {
                     fillMode: Image.Pad
 
                     source: "image://svgimage-custom-color/edit.svg/" + Style.menuBorder
-                    sourceSize.width: moreMenu.rowIconWidth
-                    sourceSize.height: moreMenu.rowIconWidth
+                    sourceSize.width: scrollContentsColumn.rowIconWidth
+                    sourceSize.height: scrollContentsColumn.rowIconWidth
                 }
 
                 NCInputTextEdit {
