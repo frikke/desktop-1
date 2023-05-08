@@ -27,4 +27,4 @@ The following parameters are supported:
 Examples:
 
 - ``C:\Program Files\Nextcloud\nextcloud.exe" --userid admin --apppassword Jliy12356785jxnHa2ZCiZ9MX48ncECwDso95Pq3a5HABjY34ZvhZiXrPfpKWUg7aOHAX5 --localdirpath "D:\\Nextcloud-sync-folder" --remotedirpath /Music --serverurl "https://cloud.example.com" --isvfsenabled 1"`` - this will create a config file for user admin on the server https://cloud.example.com and set a remote root folder to "Music", the local sync folder will get created with VFS mode.
-- For Linux and mac the same example as above will work but ``nextcloud.exe path`` and ``--localdirpath`` should get changed to platform specific format (e.g. ``no extension`` and ``\home\user folder`` format)
+- For Linux and mac the same example as above will work but ``nextcloud.exe path`` and ``--localdirpath`` value should get changed to platform specific format (e.g. ``no .exe extension`` and ``/home/<user folder>`` format)

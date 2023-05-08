@@ -33,3 +33,8 @@ Low Disk Space
 --------------
 .. index:: disk space
 .. include:: lowdiskspace.rst
+
+Wizard Account Setup Command-line Options
+-------
+.. index:: wizard accountsetup command-line
+.. include:: wizardaccountsetupcommandline.rst
