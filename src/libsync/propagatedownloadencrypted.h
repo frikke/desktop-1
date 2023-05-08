@@ -7,6 +7,7 @@
 #include "syncfileitem.h"
 #include "owncloudpropagator.h"
 #include "clientsideencryption.h"
+#include "foldermetadata.h"
 
 class QJsonDocument;
 
@@ -39,6 +40,8 @@ private:
   QFileInfo _info;
   EncryptedFile _encryptedInfo;
   QString _errorString;
+  QString _remoteParentPath;
+  QString _parentPathInDb;
 };
 
 }

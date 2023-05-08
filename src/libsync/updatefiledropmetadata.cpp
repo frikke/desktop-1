@@ -17,6 +17,7 @@
 #include "account.h"
 #include "clientsideencryptionjobs.h"
 #include "clientsideencryption.h"
+#include "foldermetadata.h"
 #include "syncfileitem.h"
 
 #include <QLoggingCategory>
@@ -112,9 +113,7 @@ void UpdateFileDropMetadataJob::slotFolderEncryptedMetadataError(const QByteArra
     Q_UNUSED(fileId);
     Q_UNUSED(httpReturnCode);
     qCDebug(lcUpdateFileDropMetadataJob()) << "Error Getting the encrypted metadata. Pretend we got empty metadata.";
-    const FolderMetadata emptyMetadata(propagator()->account());
-    const auto encryptedMetadataJson = QJsonDocument::fromJson(emptyMetadata.encryptedMetadata());
-    slotFolderEncryptedMetadataReceived(encryptedMetadataJson, httpReturnCode);
+    slotFolderEncryptedMetadataReceived({}, httpReturnCode);
 }
 
 void UpdateFileDropMetadataJob::slotFolderEncryptedMetadataReceived(const QJsonDocument &json, int statusCode)
@@ -122,20 +121,27 @@ void UpdateFileDropMetadataJob::slotFolderEncryptedMetadataReceived(const QJsonD
     qCDebug(lcUpdateFileDropMetadataJob) << "Metadata Received, Preparing it for the new file." << json.toVariant();
 
     // Encrypt File!
-    _metadata.reset(new FolderMetadata(propagator()->account(),
-                                       FolderMetadata::RequiredMetadataVersion::Version1,
-                                       json.toJson(QJsonDocument::Compact), statusCode));
-    if (!_metadata->moveFromFileDropToFiles() && !_metadata->encryptedMetadataNeedUpdate()) {
+    SyncJournalFileRecord rec;
+    if (!propagator()->_journal->getTopLevelE2eFolderRecord(_path, &rec) || !rec.isValid()) {
         unlockFolder();
         return;
     }
 
-    emit fileDropMetadataParsedAndAdjusted(_metadata.data());
+    const auto topLevelFolderPath = rec.path() == _path ? QStringLiteral("/") : rec.path();
+    _metadata.reset(new FolderMetadata(propagator()->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    connect(_metadata.data(), &FolderMetadata::setupComplete, this, [this] {
+        if (!_metadata->moveFromFileDropToFiles()) {
+            unlockFolder();
+            return;
+        }
 
-    const auto updateMetadataJob = new UpdateMetadataApiJob(propagator()->account(), _folderId, _metadata->encryptedMetadata(), _folderToken);
-    connect(updateMetadataJob, &UpdateMetadataApiJob::success, this, &UpdateFileDropMetadataJob::slotUpdateMetadataSuccess);
-    connect(updateMetadataJob, &UpdateMetadataApiJob::error, this, &UpdateFileDropMetadataJob::slotUpdateMetadataError);
-    updateMetadataJob->start();
+        emit fileDropMetadataParsedAndAdjusted(_metadata.data());
+
+        const auto updateMetadataJob = new UpdateMetadataApiJob(propagator()->account(), _folderId, _metadata->encryptedMetadata(), _folderToken);
+        connect(updateMetadataJob, &UpdateMetadataApiJob::success, this, &UpdateFileDropMetadataJob::slotUpdateMetadataSuccess);
+        connect(updateMetadataJob, &UpdateMetadataApiJob::error, this, &UpdateFileDropMetadataJob::slotUpdateMetadataError);
+        updateMetadataJob->start();
+    });
 }
 
 void UpdateFileDropMetadataJob::slotUpdateMetadataSuccess(const QByteArray &fileId)

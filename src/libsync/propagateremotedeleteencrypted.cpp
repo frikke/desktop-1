@@ -14,6 +14,7 @@
 
 #include "propagateremotedeleteencrypted.h"
 #include "clientsideencryptionjobs.h"
+#include "foldermetadata.h"
 #include "owncloudpropagator.h"
 #include "encryptfolderjob.h"
 #include <QLoggingCategory>
@@ -50,45 +51,53 @@ void PropagateRemoteDeleteEncrypted::slotFolderEncryptedMetadataReceived(const Q
         deleteRemoteItem(_item->_encryptedFileName);
         return;
     }
-
-    FolderMetadata metadata(_propagator->account(),
-                            _item->_e2eEncryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2 ? FolderMetadata::RequiredMetadataVersion::Version1_2 : FolderMetadata::RequiredMetadataVersion::Version1,
-                            json.toJson(QJsonDocument::Compact), statusCode);
-
-    if (!metadata.isMetadataSetup()) {
+    const auto fullFolderRemotePathSanitized = _fullFolderRemotePath.startsWith(QLatin1Char('/')) ? _fullFolderRemotePath.mid(1) : _fullFolderRemotePath;
+    SyncJournalFileRecord rec;
+    if (!_propagator->_journal->getTopLevelE2eFolderRecord(_fullFolderRemotePath, &rec) || !rec.isValid()) {
         taskFailed();
         return;
     }
 
-    qCDebug(PROPAGATE_REMOVE_ENCRYPTED) << "Metadata Received, preparing it for removal of the file";
-
-    const QFileInfo info(_propagator->fullLocalPath(_item->_file));
-    const QString fileName = info.fileName();
-
-    // Find existing metadata for this file
-    bool found = false;
-    const QVector<EncryptedFile> files = metadata.files();
-    for (const EncryptedFile &file : files) {
-        if (file.originalFilename == fileName) {
-            metadata.removeEncryptedFile(file);
-            found = true;
-            break;
+    const auto topLevelFolderPath = rec.path() == fullFolderRemotePathSanitized ? QStringLiteral("/") : rec.path();
+    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    connect(metadata, &FolderMetadata::setupComplete, this, [this, metadata] {
+        if (!metadata->isMetadataSetup()) {
+            taskFailed();
+            metadata->deleteLater();
+            return;
         }
-    }
 
-    if (!found) {
-        // file is not found in the metadata, but we still need to remove it
-        deleteRemoteItem(_item->_encryptedFileName);
-        return;
-    }
+        qCDebug(PROPAGATE_REMOVE_ENCRYPTED) << "Metadata Received, preparing it for removal of the file";
 
-    qCDebug(PROPAGATE_REMOVE_ENCRYPTED) << "Metadata updated, sending to the server.";
+        const QFileInfo info(_propagator->fullLocalPath(_item->_file));
+        const QString fileName = info.fileName();
 
-    auto job = new UpdateMetadataApiJob(_propagator->account(), _folderId, metadata.encryptedMetadata(), _folderToken);
-    connect(job, &UpdateMetadataApiJob::success, this, [this](const QByteArray& fileId) {
-        Q_UNUSED(fileId);
-        deleteRemoteItem(_item->_encryptedFileName);
+        // Find existing metadata for this file
+        bool found = false;
+        const QVector<EncryptedFile> files = metadata->files();
+        for (const EncryptedFile &file : files) {
+            if (file.originalFilename == fileName) {
+                metadata->removeEncryptedFile(file);
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            // file is not found in the metadata, but we still need to remove it
+            deleteRemoteItem(_item->_encryptedFileName);
+            return;
+        }
+
+        qCDebug(PROPAGATE_REMOVE_ENCRYPTED) << "Metadata updated, sending to the server.";
+
+        metadata->deleteLater();
+        const auto job = new UpdateMetadataApiJob(_propagator->account(), _folderId, metadata->encryptedMetadata(), _folderToken);
+        connect(job, &UpdateMetadataApiJob::success, this, [this](const QByteArray &fileId) {
+            Q_UNUSED(fileId);
+            deleteRemoteItem(_item->_encryptedFileName);
+        });
+        connect(job, &UpdateMetadataApiJob::error, this, &PropagateRemoteDeleteEncrypted::taskFailed);
+        job->start();
     });
-    connect(job, &UpdateMetadataApiJob::error, this, &PropagateRemoteDeleteEncrypted::taskFailed);
-    job->start();
 }

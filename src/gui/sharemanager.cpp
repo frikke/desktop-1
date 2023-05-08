@@ -17,6 +17,8 @@
 #include "account.h"
 #include "folderman.h"
 #include "accountstate.h"
+#include "clientsideencryption.h"
+#include "updatee2eesharemetadatajob.h"
 
 #include <QUrl>
 #include <QJsonDocument>
@@ -486,6 +488,18 @@ void ShareManager::createShare(const QString &path,
     job->getSharedWithMe();
 }
 
+void ShareManager::createE2EeShareJob(const QString &path,
+                                      const ShareePtr sharee,
+                                      const Share::Permissions permissions,
+                                      const QByteArray &folderId,
+                                      const QString &folderAlias,
+                                      const QString &password)
+{
+    const auto createE2eeShareJob =
+        new UpdateE2eeShareMetadataJob(_account, folderId, folderAlias, sharee, UpdateE2eeShareMetadataJob::Add, path, permissions, password, this);
+    connect(createE2eeShareJob, &UpdateE2eeShareMetadataJob::finished, this, &ShareManager::slotCreateE2eeShareJobFinised);
+    createE2eeShareJob->start();
+}
 
 void ShareManager::slotShareCreated(const QJsonDocument &reply)
 {
@@ -629,5 +643,20 @@ SharePtr ShareManager::parseShare(const QJsonObject &data) const
 void ShareManager::slotOcsError(int statusCode, const QString &message)
 {
     emit serverError(statusCode, message);
+}
+
+void ShareManager::slotCreateE2eeShareJobFinised(int statusCode, const QString &message)
+{
+    const auto job = qobject_cast<UpdateE2eeShareMetadataJob *>(sender());
+    Q_ASSERT(job);
+    if (!job) {
+        qCWarning(lcUserGroupShare) << "slotCreateE2eeShareJobFinised must be called by UpdateE2eeShareMetadataJob::finished signal!";
+    }
+    disconnect(job, &UpdateE2eeShareMetadataJob::finished, this, &ShareManager::slotCreateE2eeShareJobFinised);
+    if (statusCode != 200) {
+        emit serverError(statusCode, message);
+    } else {
+        createShare(job->sharePath(), Share::ShareType(job->sharee()->type()), job->sharee()->shareWith(), job->desiredPermissions(), job->password());
+    }
 }
 }

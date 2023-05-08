@@ -131,6 +131,7 @@ private:
 public:
 };
 
+class FolderMetadata;
 
 /**
  * @brief Run a PROPFIND on a directory and process the results for Discovery
@@ -141,12 +142,13 @@ class DiscoverySingleDirectoryJob : public QObject
 {
     Q_OBJECT
 public:
-    explicit DiscoverySingleDirectoryJob(const AccountPtr &account, const QString &path, QObject *parent = nullptr);
+    explicit DiscoverySingleDirectoryJob(const AccountPtr &account, const QString &path, const QSet<QString> &listTopLevelE2eeFolders, QObject *parent = nullptr);
     // Specify that this is the root and we need to check the data-fingerprint
     void setIsRootPath() { _isRootPath = true; }
     void start();
     void abort();
     [[nodiscard]] bool isFileDropDetected() const;
+    [[nodiscard]] QSharedPointer<FolderMetadata> e2eeFolderMetadata() const;
     [[nodiscard]] bool encryptedMetadataNeedUpdate() const;
 
     // This is not actually a network job, it is just a job
@@ -154,6 +156,9 @@ signals:
     void firstDirectoryPermissions(OCC::RemotePermissions);
     void etag(const QByteArray &, const QDateTime &time);
     void finished(const OCC::HttpResult<QVector<OCC::RemoteInfo>> &result);
+
+public slots:
+    void setTopLevelE2eeFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelE2eeFolderMetadata);
 
 private slots:
     void directoryListingIteratedSlot(const QString &, const QMap<QString, QString> &);
@@ -188,6 +193,13 @@ private:
     int64_t _size = 0;
     QString _error;
     QPointer<LsColJob> _lsColJob;
+    
+    QSharedPointer<FolderMetadata> _e2EeFolderMetadata;
+    QSharedPointer<FolderMetadata> _topLevelE2eeFolderMetadata;
+
+    QSet<QString> _listTopLevelE2eeFolders;
+
+    QMap<QString, QSharedPointer<FolderMetadata>> _topLevelE2eeFoldersMetadata;
 
 public:
     QByteArray _dataFingerprint;
@@ -307,6 +319,10 @@ public:
     QVector<QString> _filesUnscheduleSync;
 
     QStringList _listExclusiveFiles;
+
+    QSet<QString> _listTopLevelE2eeFolders;
+
+    QMap<QString, QSharedPointer<FolderMetadata>> _topLevelE2eeFoldersMetadata;
 
 signals:
     void fatalError(const QString &errorString, const OCC::ErrorCategory errorCategory);

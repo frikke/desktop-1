@@ -18,6 +18,7 @@
 #include "networkjobs.h"
 #include "clientsideencryption.h"
 #include <common/checksums.h>
+#include "foldermetadata.h"
 
 #include <QBuffer>
 #include <QFile>

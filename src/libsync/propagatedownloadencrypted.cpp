@@ -1,5 +1,6 @@
 #include "propagatedownloadencrypted.h"
 #include "clientsideencryptionjobs.h"
+#include "foldermetadata.h"
 
 Q_LOGGING_CATEGORY(lcPropagateDownloadEncrypted, "nextcloud.sync.propagator.download.encrypted", QtInfoMsg)
 
@@ -13,10 +14,6 @@ PropagateDownloadEncrypted::PropagateDownloadEncrypted(OwncloudPropagator *propa
     , _item(item)
     , _info(_item->_file)
 {
-}
-
-void PropagateDownloadEncrypted::start()
-{
     const auto rootPath = [=]() {
         const auto result = _propagator->remotePath();
         if (result.startsWith('/')) {
@@ -28,9 +25,18 @@ void PropagateDownloadEncrypted::start()
     const auto remoteFilename = _item->_encryptedFileName.isEmpty() ? _item->_file : _item->_encryptedFileName;
     const auto remotePath = QString(rootPath + remoteFilename);
     const auto remoteParentPath = remotePath.left(remotePath.lastIndexOf('/'));
+    _remoteParentPath = remotePath.left(remotePath.lastIndexOf('/'));
 
+    const auto filenameInDb = _item->_file;
+    const auto pathInDb = QString(rootPath + filenameInDb);
+    const auto parentPathInDb = pathInDb.left(pathInDb.lastIndexOf('/'));
+    _parentPathInDb = pathInDb.left(pathInDb.lastIndexOf('/'));
+}
+
+void PropagateDownloadEncrypted::start()
+{
     // Is encrypted Now we need the folder-id
-    auto job = new LsColJob(_propagator->account(), remoteParentPath, this);
+    auto job = new LsColJob(_propagator->account(), _remoteParentPath, this);
     job->setProperties({"resourcetype", "http://owncloud.org/ns:fileid"});
     connect(job, &LsColJob::directoryListingSubfolders,
             this, &PropagateDownloadEncrypted::checkFolderId);
@@ -72,27 +78,35 @@ void PropagateDownloadEncrypted::checkFolderEncryptedMetadata(const QJsonDocumen
 {
   qCDebug(lcPropagateDownloadEncrypted) << "Metadata Received reading"
                                         << _item->_instruction << _item->_file << _item->_encryptedFileName;
-  const QString filename = _info.fileName();
-  const FolderMetadata metadata(_propagator->account(),
-                                _item->_e2eEncryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2 ? FolderMetadata::RequiredMetadataVersion::Version1_2 : FolderMetadata::RequiredMetadataVersion::Version1,
-                                json.toJson(QJsonDocument::Compact));
-  if (metadata.isMetadataSetup()) {
-      const QVector<EncryptedFile> files = metadata.files();
-
-      const QString encryptedFilename = _item->_encryptedFileName.section(QLatin1Char('/'), -1);
-      for (const EncryptedFile &file : files) {
-          if (encryptedFilename == file.encryptedFilename) {
-              _encryptedInfo = file;
-
-              qCDebug(lcPropagateDownloadEncrypted) << "Found matching encrypted metadata for file, starting download";
-              emit fileMetadataFound();
-              return;
-          }
-      }
+  const auto filename = _info.fileName();
+  SyncJournalFileRecord rec;
+  if (!_propagator->_journal->getTopLevelE2eFolderRecord(_parentPathInDb, &rec) || !rec.isValid()) {
+      emit failed();
+      return;
   }
 
-  emit failed();
-  qCCritical(lcPropagateDownloadEncrypted) << "Failed to find encrypted metadata information of remote file" << filename;
+  const auto topLevelFolderPath = rec.path() == _parentPathInDb ? QStringLiteral("/") : rec.path();
+  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(), json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+  connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, metadata, filename] {
+      if (metadata->isMetadataSetup()) {
+          const QVector<EncryptedFile> files = metadata->files();
+
+          const QString encryptedFilename = _item->_encryptedFileName.section(QLatin1Char('/'), -1);
+          for (const EncryptedFile &file : files) {
+              if (encryptedFilename == file.encryptedFilename) {
+                  _encryptedInfo = file;
+
+                  qCDebug(lcPropagateDownloadEncrypted) << "Found matching encrypted metadata for file, starting download";
+                  emit fileMetadataFound();
+                  return;
+              }
+          }
+      }
+
+      emit failed();
+      qCCritical(lcPropagateDownloadEncrypted) << "Failed to find encrypted metadata information of remote file" << filename;
+  });
+
 }
 
 // TODO: Fix this. Exported in the wrong place.

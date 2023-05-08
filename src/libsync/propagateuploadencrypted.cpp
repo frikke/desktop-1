@@ -2,6 +2,7 @@
 #include "clientsideencryptionjobs.h"
 #include "networkjobs.h"
 #include "clientsideencryption.h"
+#include "foldermetadata.h"
 #include "account.h"
 
 #include <QFileInfo>
@@ -21,11 +22,6 @@ PropagateUploadEncrypted::PropagateUploadEncrypted(OwncloudPropagator *propagato
     , _propagator(propagator)
     , _remoteParentPath(remoteParentPath)
     , _item(item)
-    , _metadata(nullptr)
-{
-}
-
-void PropagateUploadEncrypted::start()
 {
     const auto rootPath = [=]() {
         const auto result = _propagator->remotePath();
@@ -35,15 +31,18 @@ void PropagateUploadEncrypted::start()
             return result;
         }
     }();
-    const auto absoluteRemoteParentPath = [=]{
+    _remoteParentAbsolutePath = [=] {
         auto path = QString(rootPath + _remoteParentPath);
         if (path.endsWith('/')) {
             path.chop(1);
         }
         return path;
     }();
+}
 
 
+void PropagateUploadEncrypted::start()
+{
     /* If the file is in a encrypted folder, which we know, we wouldn't be here otherwise,
      * we need to do the long road:
      * find the ID of the folder.
@@ -55,7 +54,7 @@ void PropagateUploadEncrypted::start()
      * unlock the folder.
      */
     qCDebug(lcPropagateUploadEncrypted) << "Folder is encrypted, let's get the Id from it.";
-    auto job = new LsColJob(_propagator->account(), absoluteRemoteParentPath, this);
+    auto job = new LsColJob(_propagator->account(), _remoteParentAbsolutePath, this);
     job->setProperties({"resourcetype", "http://owncloud.org/ns:fileid"});
     connect(job, &LsColJob::directoryListingSubfolders, this, &PropagateUploadEncrypted::slotFolderEncryptedIdReceived);
     connect(job, &LsColJob::finishedWithError, this, &PropagateUploadEncrypted::slotFolderEncryptedIdError);
@@ -106,122 +105,122 @@ void PropagateUploadEncrypted::slotFolderLockedSuccessfully(const QByteArray& fi
   job->start();
 }
 
-void PropagateUploadEncrypted::slotFolderEncryptedMetadataError(const QByteArray& fileId, int httpReturnCode)
+void PropagateUploadEncrypted::slotFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode)
 {
     Q_UNUSED(fileId);
     Q_UNUSED(httpReturnCode);
     qCDebug(lcPropagateUploadEncrypted()) << "Error Getting the encrypted metadata. Pretend we got empty metadata.";
-    const FolderMetadata emptyMetadata(_propagator->account());
-    auto json = QJsonDocument::fromJson(emptyMetadata.encryptedMetadata());
-    slotFolderEncryptedMetadataReceived(json, httpReturnCode);
+    slotFolderEncryptedMetadataReceived({}, httpReturnCode);
 }
 
 void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDocument &json, int statusCode)
 {
-  qCDebug(lcPropagateUploadEncrypted) << "Metadata Received, Preparing it for the new file." << json.toVariant();
+    qCDebug(lcPropagateUploadEncrypted) << "Metadata Received, Preparing it for the new file." << json.toVariant();
 
-  // Encrypt File!
-  _metadata.reset(new FolderMetadata(_propagator->account(),
-                                     _item->_e2eEncryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2 ? FolderMetadata::RequiredMetadataVersion::Version1_2 : FolderMetadata::RequiredMetadataVersion::Version1,
-                                     json.toJson(QJsonDocument::Compact), statusCode));
-
-  if (!_metadata->isMetadataSetup()) {
-      if (_isFolderLocked) {
-          connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
-          unlockFolder();
-      } else {
-          emit error();
-      }
-      return;
-  }
-
-  QFileInfo info(_propagator->fullLocalPath(_item->_file));
-  const QString fileName = info.fileName();
-
-  // Find existing metadata for this file
-  bool found = false;
-  EncryptedFile encryptedFile;
-  const QVector<EncryptedFile> files = _metadata->files();
-
-  for(const EncryptedFile &file : files) {
-    if (file.originalFilename == fileName) {
-      encryptedFile = file;
-      found = true;
-    }
-  }
-
-
-
-  // New encrypted file so set it all up!
-  if (!found) {
-      encryptedFile.encryptionKey = EncryptionHelper::generateRandom(16);
-      encryptedFile.encryptedFilename = EncryptionHelper::generateRandomFilename();
-      encryptedFile.originalFilename = fileName;
-
-      QMimeDatabase mdb;
-      encryptedFile.mimetype = mdb.mimeTypeForFile(info).name().toLocal8Bit();
-
-      // Other clients expect "httpd/unix-directory" instead of "inode/directory"
-      // Doesn't matter much for us since we don't do much about that mimetype anyway
-      if (encryptedFile.mimetype == QByteArrayLiteral("inode/directory")) {
-          encryptedFile.mimetype = QByteArrayLiteral("httpd/unix-directory");
-      }
-  }
-  
-  encryptedFile.initializationVector = EncryptionHelper::generateRandom(16);
-
-  _item->_encryptedFileName = _remoteParentPath + QLatin1Char('/') + encryptedFile.encryptedFilename;
-  _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2;
-
-  qCDebug(lcPropagateUploadEncrypted) << "Creating the encrypted file.";
-
-  if (info.isDir()) {
-      _completeFileName = encryptedFile.encryptedFilename;
-  } else {
-      QFile input(info.absoluteFilePath());
-      QFile output(QDir::tempPath() + QDir::separator() + encryptedFile.encryptedFilename);
-
-      QByteArray tag;
-      bool encryptionResult = EncryptionHelper::fileEncryption(
-        encryptedFile.encryptionKey,
-        encryptedFile.initializationVector,
-        &input, &output, tag);
-
-      if (!encryptionResult) {
-        qCDebug(lcPropagateUploadEncrypted()) << "There was an error encrypting the file, aborting upload.";
-        connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
-        unlockFolder();
+    // Encrypt File!
+    SyncJournalFileRecord rec;
+    if (!_propagator->_journal->getTopLevelE2eFolderRecord(_remoteParentAbsolutePath, &rec) || !rec.isValid()) {
+        if (_isFolderLocked) {
+            connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
+            unlockFolder();
+        } else {
+            emit error();
+        }
         return;
-      }
+    }
 
-      encryptedFile.authenticationTag = tag;
-      _completeFileName = output.fileName();
-  }
+    const auto topLevelFolderPath = rec.path() == _remoteParentAbsolutePath ? QStringLiteral("/") : rec.path();
 
-  qCDebug(lcPropagateUploadEncrypted) << "Creating the metadata for the encrypted file.";
+    QSharedPointer<FolderMetadata> metadata(
+        new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, statusCode, metadata] {
+        if (!metadata->isMetadataSetup()) {
+            if (_isFolderLocked) {
+                connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
+                unlockFolder();
+            } else {
+                emit error();
+            }
+            return;
+        }
 
-  _metadata->addEncryptedFile(encryptedFile);
-  _encryptedFile = encryptedFile;
+        QFileInfo info(_propagator->fullLocalPath(_item->_file));
+        const QString fileName = info.fileName();
 
-  qCDebug(lcPropagateUploadEncrypted) << "Metadata created, sending to the server.";
+        // Find existing metadata for this file
+        bool found = false;
+        EncryptedFile encryptedFile;
+        const QVector<EncryptedFile> files = metadata->files();
 
-  if (statusCode == 404) {
-    auto job = new StoreMetaDataApiJob(_propagator->account(),
-                                       _folderId,
-                                       _metadata->encryptedMetadata());
-    connect(job, &StoreMetaDataApiJob::success, this, &PropagateUploadEncrypted::slotUpdateMetadataSuccess);
-    connect(job, &StoreMetaDataApiJob::error, this, &PropagateUploadEncrypted::slotUpdateMetadataError);
-    job->start();
-  } else {
-    auto job = new UpdateMetadataApiJob(_propagator->account(),
-                                      _folderId,
-                                      _metadata->encryptedMetadata(),
-                                      _folderToken);
+        for (const EncryptedFile &file : files) {
+            if (file.originalFilename == fileName) {
+                encryptedFile = file;
+                found = true;
+            }
+        }
 
-    connect(job, &UpdateMetadataApiJob::success, this, &PropagateUploadEncrypted::slotUpdateMetadataSuccess);
-    connect(job, &UpdateMetadataApiJob::error, this, &PropagateUploadEncrypted::slotUpdateMetadataError);
-    job->start();
-  }
+        // New encrypted file so set it all up!
+        if (!found) {
+            encryptedFile.encryptionKey = EncryptionHelper::generateRandom(16);
+            encryptedFile.encryptedFilename = EncryptionHelper::generateRandomFilename();
+            encryptedFile.originalFilename = fileName;
+
+            QMimeDatabase mdb;
+            encryptedFile.mimetype = mdb.mimeTypeForFile(info).name().toLocal8Bit();
+
+            // Other clients expect "httpd/unix-directory" instead of "inode/directory"
+            // Doesn't matter much for us since we don't do much about that mimetype anyway
+            if (encryptedFile.mimetype == QByteArrayLiteral("inode/directory")) {
+                encryptedFile.mimetype = QByteArrayLiteral("httpd/unix-directory");
+            }
+        }
+
+        encryptedFile.initializationVector = EncryptionHelper::generateRandom(16);
+
+        _item->_encryptedFileName = _remoteParentPath + QLatin1Char('/') + encryptedFile.encryptedFilename;
+        _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2;
+
+        qCDebug(lcPropagateUploadEncrypted) << "Creating the encrypted file.";
+
+        if (info.isDir()) {
+            _completeFileName = encryptedFile.encryptedFilename;
+        } else {
+            QFile input(info.absoluteFilePath());
+            QFile output(QDir::tempPath() + QDir::separator() + encryptedFile.encryptedFilename);
+
+            QByteArray tag;
+            bool encryptionResult = EncryptionHelper::fileEncryption(encryptedFile.encryptionKey, encryptedFile.initializationVector, &input, &output, tag);
+
+            if (!encryptionResult) {
+                qCDebug(lcPropagateUploadEncrypted()) << "There was an error encrypting the file, aborting upload.";
+                connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
+                unlockFolder();
+                return;
+            }
+
+            encryptedFile.authenticationTag = tag;
+            _completeFileName = output.fileName();
+        }
+
+        qCDebug(lcPropagateUploadEncrypted) << "Creating the metadata for the encrypted file.";
+
+        metadata->addEncryptedFile(encryptedFile);
+
+        qCDebug(lcPropagateUploadEncrypted) << "Metadata created, sending to the server.";
+
+        const auto encryptedMetadata = metadata->encryptedMetadata();
+        if (statusCode == 404) {
+            const auto job = new StoreMetaDataApiJob(_propagator->account(), _folderId, encryptedMetadata);
+            connect(job, &StoreMetaDataApiJob::success, this, &PropagateUploadEncrypted::slotUpdateMetadataSuccess);
+            connect(job, &StoreMetaDataApiJob::error, this, &PropagateUploadEncrypted::slotUpdateMetadataError);
+            job->start();
+        } else {
+            const auto job = new UpdateMetadataApiJob(_propagator->account(), _folderId, encryptedMetadata, _folderToken);
+            connect(job, &UpdateMetadataApiJob::success, this, &PropagateUploadEncrypted::slotUpdateMetadataSuccess);
+            connect(job, &UpdateMetadataApiJob::error, this, &PropagateUploadEncrypted::slotUpdateMetadataError);
+            job->start();
+        }
+    });
 }
 
 void PropagateUploadEncrypted::slotUpdateMetadataSuccess(const QByteArray& fileId)

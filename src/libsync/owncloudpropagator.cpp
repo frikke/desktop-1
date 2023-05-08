@@ -30,6 +30,7 @@
 #include "common/asserts.h"
 #include "discoveryphase.h"
 #include "syncfileitem.h"
+#include "foldermetadata.h"
 
 #ifdef Q_OS_WIN
 #include <windef.h>
@@ -1074,6 +1075,21 @@ void OwncloudPropagator::removeFromBulkUploadBlackList(const QString &file)
 bool OwncloudPropagator::isInBulkUploadBlackList(const QString &file) const
 {
     return _bulkUploadBlackList.contains(file);
+}
+
+QSharedPointer<FolderMetadata> OwncloudPropagator::findTopLevelFolderMetadata(const QString &path) const
+{
+    return _topLevelFolderMetadata.value(path, QSharedPointer<FolderMetadata>{});
+}
+
+const QMap<QString, QSharedPointer<FolderMetadata>> &OwncloudPropagator::topLevelFolderMetadata() const
+{
+    return _topLevelFolderMetadata;
+}
+
+void OwncloudPropagator::setTopLevelFolderMetadata(const QMap<QString, QSharedPointer<FolderMetadata>> &topLevelFolderMetadata)
+{
+    _topLevelFolderMetadata = topLevelFolderMetadata;
 }
 
 // ================================================================================

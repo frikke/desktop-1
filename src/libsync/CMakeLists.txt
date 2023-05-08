@@ -1,4 +1,5 @@
 project(libsync)
+find_package(KF5Archive REQUIRED)
 include(DefinePlatformDefaults)
 
 set(CMAKE_AUTOMOC TRUE)
@@ -107,6 +108,8 @@ set(libsync_SRCS
     clientsideencryptionjobs.cpp
     datetimeprovider.h
     datetimeprovider.cpp
+    foldermetadata.h
+    foldermetadata.cpp
     ocsuserstatusconnector.h
     ocsuserstatusconnector.cpp
     userstatusconnector.h
@@ -186,6 +189,7 @@ target_link_libraries(nextcloudsync
   Qt5::Network
   Qt5::WebSockets
   Qt5::Xml
+  KF5::Archive
 )
 
 if (NOT TOKEN_AUTH_ONLY)

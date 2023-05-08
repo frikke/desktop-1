@@ -135,7 +135,7 @@ signals:
     void shareesChanged();
     void internalLinkReady();
 
-    void serverError(const int code, const QString &message);
+    void serverError(const int code, const QString &message) const;
     void passwordSetError(const QString &shareId, const int code, const QString &message);
     void requestPasswordForLinkShare();
     void requestPasswordForEmailSharee(const OCC::ShareePtr &sharee);
@@ -205,6 +205,7 @@ private slots:
     void slotShareNameSet(const QString &shareId);
     void slotShareLabelSet(const QString &shareId);
     void slotShareExpireDateSet(const QString &shareId);
+    void slotDeleteE2EeShare(const SharePtr &share) const;
 
 private:
     [[nodiscard]] QString displayStringForShare(const SharePtr &share) const;
@@ -234,6 +235,7 @@ private:
     SharedItemType _sharedItemType = SharedItemType::SharedItemTypeUndefined;
     SyncJournalFileLockInfo _filelockState;
     QString _privateLinkUrl;
+    QByteArray _folderId;
 
     QSharedPointer<ShareManager> _manager;
 

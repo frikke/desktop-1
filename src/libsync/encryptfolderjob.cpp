@@ -16,6 +16,7 @@
 
 #include "common/syncjournaldb.h"
 #include "clientsideencryptionjobs.h"
+#include "foldermetadata.h"
 
 #include <QLoggingCategory>
 
@@ -32,7 +33,7 @@ EncryptFolderJob::EncryptFolderJob(const AccountPtr &account, SyncJournalDb *jou
 {
 }
 
-void EncryptFolderJob::start()
+void EncryptFolderJob::slotSetEncryptionFlag()
 {
     auto job = new OCC::SetEncryptionFlagApiJob(_account, _fileId, OCC::SetEncryptionFlagApiJob::Set, this);
     connect(job, &OCC::SetEncryptionFlagApiJob::success, this, &EncryptFolderJob::slotEncryptionFlagSuccess);
@@ -40,9 +41,19 @@ void EncryptFolderJob::start()
     job->start();
 }
 
+void EncryptFolderJob::start()
+{
+    slotSetEncryptionFlag();
+}
+
 QString EncryptFolderJob::errorString() const
 {
     return _errorString;
+}
+
+void EncryptFolderJob::setPathNonEncrypted(const QString &pathNonEncrypted)
+{
+    _pathNonEncrypted = pathNonEncrypted;
 }
 
 void EncryptFolderJob::slotEncryptionFlagSuccess(const QByteArray &fileId)
@@ -82,23 +93,30 @@ void EncryptFolderJob::slotEncryptionFlagError(const QByteArray &fileId,
 void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, const QByteArray &token)
 {
     _folderToken = token;
-
-    const FolderMetadata emptyMetadata(_account);
-    const auto encryptedMetadata = emptyMetadata.encryptedMetadata();
-    if (encryptedMetadata.isEmpty()) {
-        //TODO: Mark the folder as unencrypted as the metadata generation failed.
-        _errorString = tr("Could not generate the metadata for encryption, Unlocking the folder.\n"
-                          "This can be an issue with your OpenSSL libraries.");
+    const auto currentPath = !_pathNonEncrypted.isEmpty() ? _pathNonEncrypted : _path;
+    SyncJournalFileRecord rec;
+    if (!_journal->getTopLevelE2eFolderRecord(currentPath, &rec)) {
         emit finished(Error);
         return;
     }
+    const auto topLevelFolderPath = rec.path() == currentPath ? QStringLiteral("/") : rec.path();
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, topLevelFolderPath));
+    connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, metadata] {
+        const auto encryptedMetadata = metadata->encryptedMetadata();
+        if (encryptedMetadata.isEmpty()) {
+            // TODO: Mark the folder as unencrypted as the metadata generation failed.
+            _errorString =
+                tr("Could not generate the metadata for encryption, Unlocking the folder.\n"
+                   "This can be an issue with your OpenSSL libraries.");
+            emit finished(Error);
+            return;
+        }
 
-    auto storeMetadataJob = new StoreMetaDataApiJob(_account, fileId, emptyMetadata.encryptedMetadata(), this);
-    connect(storeMetadataJob, &StoreMetaDataApiJob::success,
-            this, &EncryptFolderJob::slotUploadMetadataSuccess);
-    connect(storeMetadataJob, &StoreMetaDataApiJob::error,
-            this, &EncryptFolderJob::slotUpdateMetadataError);
-    storeMetadataJob->start();
+        const auto storeMetadataJob = new StoreMetaDataApiJob(_account, fileId, encryptedMetadata, this);
+        connect(storeMetadataJob, &StoreMetaDataApiJob::success, this, &EncryptFolderJob::slotUploadMetadataSuccess);
+        connect(storeMetadataJob, &StoreMetaDataApiJob::error, this, &EncryptFolderJob::slotUpdateMetadataError);
+        storeMetadataJob->start();
+    });
 }
 
 void EncryptFolderJob::slotUploadMetadataSuccess(const QByteArray &folderId)
@@ -144,6 +162,7 @@ void EncryptFolderJob::slotUnlockFolderSuccess(const QByteArray &fileId)
 {
     qCInfo(lcEncryptFolderJob()) << "Unlocking success for" << fileId;
     emit finished(Success);
+    return;
 }
 
 }

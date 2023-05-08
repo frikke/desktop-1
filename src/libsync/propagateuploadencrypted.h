@@ -15,7 +15,6 @@
 #include "clientsideencryption.h"
 
 namespace OCC {
-class FolderMetadata;
 
   /* This class is used if the server supports end to end encryption.
  * It will fire for *any* folder, encrypted or not, because when the
@@ -77,9 +76,8 @@ private:
 
   QByteArray _generatedKey;
   QByteArray _generatedIv;
-  QScopedPointer<FolderMetadata> _metadata;
-  EncryptedFile _encryptedFile;
   QString _completeFileName;
+  QString _remoteParentAbsolutePath;
 };
 
 

@@ -21,6 +21,7 @@
 #include "folderman.h"
 #include "theme.h"
 #include "wordlist.h"
+#include "updatee2eesharemetadatajob.h"
 
 namespace {
 
@@ -439,14 +440,14 @@ void ShareModel::slotPropfindReceived(const QVariantMap &result)
     }
 
     const auto privateLinkUrl = result["privatelink"].toString();
-    const auto numericFileId = result["fileid"].toByteArray();
+    _folderId = result["fileid"].toByteArray();
 
     if (!privateLinkUrl.isEmpty()) {
         qCInfo(lcShareModel) << "Received private link url for" << _sharePath << privateLinkUrl;
         _privateLinkUrl = privateLinkUrl;
-    } else if (!numericFileId.isEmpty()) {
-        qCInfo(lcShareModel) << "Received numeric file id for" << _sharePath << numericFileId;
-        _privateLinkUrl = _accountState->account()->deprecatedPrivateLinkUrl(numericFileId).toString(QUrl::FullyEncoded);
+    } else if (!_folderId.isEmpty()) {
+        qCInfo(lcShareModel) << "Received numeric file id for" << _sharePath << _folderId;
+        _privateLinkUrl = _accountState->account()->deprecatedPrivateLinkUrl(_folderId).toString(QUrl::FullyEncoded);
     }
 
     setupInternalLinkShare();
@@ -829,6 +830,34 @@ void ShareModel::slotShareExpireDateSet(const QString &shareId)
     Q_EMIT dataChanged(shareModelIndex, shareModelIndex, { ExpireDateEnabledRole, ExpireDateRole });
 }
 
+void ShareModel::slotDeleteE2EeShare(const SharePtr &share) const
+{
+    const auto account = accountState()->account();
+    QString folderAlias;
+    for (const auto &f : FolderMan::instance()->map()) {
+        if (f->accountState()->account() != account) {
+            continue;
+        }
+        const auto folderPath = f->remotePath();
+        if (share->path().startsWith(folderPath) && (share->path() == folderPath || folderPath.endsWith('/') || share->path()[folderPath.size()] == '/')) {
+            folderAlias = f->alias();
+        }
+    }
+
+    const auto removeE2eeShareJob =
+        new UpdateE2eeShareMetadataJob(account, _folderId, folderAlias, share->getShareWith(), UpdateE2eeShareMetadataJob::Remove, share->path());
+    removeE2eeShareJob->setParent(_manager.data());
+    removeE2eeShareJob->start();
+    connect(removeE2eeShareJob, &UpdateE2eeShareMetadataJob::finished, this, [share, this](int code, const QString &message) {
+        if (code != 200) {
+            qCWarning(lcShareModel) << "Could not remove share from E2EE folder's metadata!";
+            emit serverError(code, message);
+            return;
+        }
+        share->deleteShare();
+    });
+}
+
 // ----------------------- Shares modification slots ----------------------- //
 
 void ShareModel::toggleShareAllowEditing(const SharePtr &share, const bool enable)
@@ -1103,11 +1132,15 @@ void ShareModel::createNewUserGroupShare(const ShareePtr &sharee)
         return;
     }
 
-    _manager->createShare(_sharePath,
-                          Share::ShareType(sharee->type()),
-                          sharee->shareWith(),
-                          _maxSharingPermissions,
-                          {});
+    if (isSecureFileDropSupportedFolder()) {
+        if (!_folder) {
+            qCWarning(lcShareModel) << "Could not share an E2EE folder" << _localPath << "no responsible folder found";
+            return;
+        }
+        _manager->createE2EeShareJob(_sharePath, sharee, _maxSharingPermissions, _folderId, _folder->alias(), {});
+    } else {
+        _manager->createShare(_sharePath, Share::ShareType(sharee->type()), sharee->shareWith(), _maxSharingPermissions, {});
+    }
 }
 
 void ShareModel::createNewUserGroupShareWithPassword(const ShareePtr &sharee, const QString &password) const
@@ -1141,7 +1174,11 @@ void ShareModel::deleteShare(const SharePtr &share) const
         return;
     }
 
-    share->deleteShare();
+    if (isEncryptedItem() && Share::isShareTypeUserGroupEmailRoomOrRemote(share->getShareType())) {
+        slotDeleteE2EeShare(share);
+    } else {
+        share->deleteShare();
+    }
 }
 
 void ShareModel::deleteShareFromQml(const QVariant &share) const

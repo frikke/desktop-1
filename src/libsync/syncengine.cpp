@@ -856,7 +856,8 @@ void SyncEngine::slotDiscoveryFinished()
         // Emit the started signal only after the propagator has been set up.
         if (_needsUpdate)
             Q_EMIT started();
-
+        
+        _propagator->setTopLevelFolderMetadata(_discoveryPhase->_topLevelE2eeFoldersMetadata);
         _propagator->start(std::move(_syncItems));
 
         qCInfo(lcEngine) << "#### Post-Reconcile end #################################################### " << _stopWatch.addLapTime(QStringLiteral("Post-Reconcile Finished")) << "ms";
