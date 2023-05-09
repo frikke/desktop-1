@@ -1886,15 +1886,29 @@ void ProcessDirectoryJob::chopVirtualFileSuffix(QString &str) const
 
 DiscoverySingleDirectoryJob *ProcessDirectoryJob::startAsyncServerQuery()
 {
+    if (_dirItem && _dirItem->isEncrypted() && _dirItem->_encryptedFileName.isEmpty()) {
+        _discoveryData->_listTopLevelE2eeFolders.insert(QLatin1Char('/') + _dirItem->_file);
+    }
     auto serverJob = new DiscoverySingleDirectoryJob(_discoveryData->_account,
-        _discoveryData->_remoteFolder + _currentFolder._server, _discoveryData->_listTopLevelE2eeFolders, this);
-    if (!_dirItem)
+                                                     _discoveryData->_remoteFolder + _currentFolder._server,
+                                                     _discoveryData->_listTopLevelE2eeFolders,
+                                                     this);
+    if (!_dirItem) {
         serverJob->setIsRootPath(); // query the fingerprint on the root
-    connect(serverJob, &DiscoverySingleDirectoryJob::etag, this, &ProcessDirectoryJob::etag);
-    _discoveryData->_currentlyActiveJobs++;
-    _pendingAsyncJobs++;
+    }
+    if (_dirItem && _dirItem->isEncrypted() && !_dirItem->_encryptedFileName.isEmpty()) {
+        const auto dirItemSplit = _dirItem->_file.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+        const auto foundTopLevelE2eeFolderMetadata = _discoveryData->_topLevelE2eeFoldersMetadata.find(dirItemSplit.first() + QLatin1Char('/'));
+        if (foundTopLevelE2eeFolderMetadata != _discoveryData->_topLevelE2eeFoldersMetadata.end()) {
+            serverJob->setTopLevelE2eeFolderMetadata(foundTopLevelE2eeFolderMetadata.value());
+        }
+    }
+
     connect(serverJob, &DiscoverySingleDirectoryJob::finished, this, [this, serverJob](const auto &results) {
         if (_dirItem) {
+            if (_dirItem->isEncrypted() && _dirItem->_encryptedFileName.isEmpty()) {
+                _discoveryData->_topLevelE2eeFoldersMetadata[_dirItem->_file + QLatin1Char('/')] = serverJob->e2eeFolderMetadata();
+            }
             _dirItem->_isFileDropDetected = serverJob->isFileDropDetected();
             _dirItem->_isEncryptedMetadataNeedUpdate = serverJob->encryptedMetadataNeedUpdate();
             qCInfo(lcDisco) << "serverJob has finished for folder:" << _dirItem->_file << " and it has _isFileDropDetected:" << true;
