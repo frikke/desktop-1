@@ -1895,15 +1895,16 @@ DiscoverySingleDirectoryJob *ProcessDirectoryJob::startAsyncServerQuery()
                                                      this);
     if (!_dirItem) {
         serverJob->setIsRootPath(); // query the fingerprint on the root
-    }
-    if (_dirItem && _dirItem->isEncrypted() && !_dirItem->_encryptedFileName.isEmpty()) {
+    } else if (_dirItem && _dirItem->isEncrypted() && !_dirItem->_encryptedFileName.isEmpty()) {
         const auto dirItemSplit = _dirItem->_file.split(QLatin1Char('/'), Qt::SkipEmptyParts);
         const auto foundTopLevelE2eeFolderMetadata = _discoveryData->_topLevelE2eeFoldersMetadata.find(dirItemSplit.first() + QLatin1Char('/'));
         if (foundTopLevelE2eeFolderMetadata != _discoveryData->_topLevelE2eeFoldersMetadata.end()) {
             serverJob->setTopLevelE2eeFolderMetadata(foundTopLevelE2eeFolderMetadata.value());
         }
     }
-
+    connect(serverJob, &DiscoverySingleDirectoryJob::etag, this, &ProcessDirectoryJob::etag);
+    _discoveryData->_currentlyActiveJobs++;
+    _pendingAsyncJobs++;
     connect(serverJob, &DiscoverySingleDirectoryJob::finished, this, [this, serverJob](const auto &results) {
         if (_dirItem) {
             if (_dirItem->isEncrypted() && _dirItem->_encryptedFileName.isEmpty()) {
