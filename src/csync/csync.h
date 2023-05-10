@@ -56,6 +56,7 @@ enum class ItemEncryptionStatus : int {
     NotEncrypted = 0,
     Encrypted = 1,
     EncryptedMigratedV1_2 = 2,
+    EncryptedMigratedV2_0 = 3,
 };
 
 Q_ENUM_NS(ItemEncryptionStatus)
@@ -65,6 +66,7 @@ enum class JournalDbEncryptionStatus : int {
     Encrypted = 1,
     EncryptedMigratedV1_2Invalid = 2,
     EncryptedMigratedV1_2 = 3,
+    EncryptedMigratedV2_0 = 4,
 };
 
 Q_ENUM_NS(JournalDbEncryptionStatus)

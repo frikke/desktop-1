@@ -127,6 +127,7 @@ private slots:
     void setupEmptyMetadataV1();
     void setupExistingMetadata(const QByteArray &metadata);
     void setupExistingMetadataVersion1(const QByteArray &metadata);
+    void setupExistingMetadataVersion1_2(const QByteArray &metadata);
     void setupExistingMetadataVersion2(const QByteArray &metadata);
     void startFetchTopLevelFolderMetadata();
     void fetchTopLevelFolderMetadata(const QByteArray &folderId);
@@ -159,7 +160,7 @@ private:
     QByteArray _initialMetadata;
     QSharedPointer<FolderMetadata> _topLevelFolderMetadata;
     QString _topLevelFolderPath;
-    int _versionFromMetadata = -1;
+    double _versionFromMetadata = -1.0;
     QJsonObject _fileDrop;
     // used by unit tests, must get assigned simultaneously with _fileDrop and not erased
     QJsonObject _fileDropFromServer;

@@ -43,6 +43,9 @@ ItemEncryptionStatus fromDbEncryptionStatus(JournalDbEncryptionStatus encryption
     case JournalDbEncryptionStatus::EncryptedMigratedV1_2Invalid:
         result = ItemEncryptionStatus::Encrypted;
         break;
+    case JournalDbEncryptionStatus::EncryptedMigratedV2_0:
+        result = ItemEncryptionStatus::EncryptedMigratedV2_0;
+        break;
     case JournalDbEncryptionStatus::NotEncrypted:
         result = ItemEncryptionStatus::NotEncrypted;
         break;
@@ -62,6 +65,9 @@ JournalDbEncryptionStatus toDbEncryptionStatus(ItemEncryptionStatus encryptionSt
         break;
     case ItemEncryptionStatus::EncryptedMigratedV1_2:
         result = JournalDbEncryptionStatus::EncryptedMigratedV1_2;
+        break;
+    case ItemEncryptionStatus::EncryptedMigratedV2_0:
+        result = JournalDbEncryptionStatus::EncryptedMigratedV2_0;
         break;
     case ItemEncryptionStatus::NotEncrypted:
         result = JournalDbEncryptionStatus::NotEncrypted;
