@@ -16,9 +16,7 @@
 
 
 #include "account.h"
-#include "folder.h"
-#include "sharee.h"
-#include "sharemanager.h"
+#include "gui/sharemanager.h"
 
 #include <QHash>
 #include <QObject>
@@ -27,7 +25,8 @@
 
 namespace OCC {
 class FolderMetadata;
-class UpdateE2eeShareMetadataJob : public QObject
+class SyncJournalDb;
+class OWNCLOUDSYNC_EXPORT UpdateE2eeShareMetadataJob : public QObject
 {
     Q_OBJECT
 
@@ -35,10 +34,12 @@ public:
     enum Operation { Invalid = -1, Add = 0, Remove, ReEncrypt };
     explicit UpdateE2eeShareMetadataJob(const AccountPtr &account,
                                 const QByteArray &folderId,
-                                const QString &folderAlias,
+                                SyncJournalDb *journalDb,
+                                const QString &folderRemotePath,
                                 const QString &_shareWith,
                                 const Operation operation,
                                 const QString &sharePath = {},
+                                const Sharee::Type &shareType = Sharee::Type::Invalid,
                                 const Share::Permissions desiredPermissions = {},
                                 const QString &password = {},
                                 QObject *parent = nullptr);
@@ -46,8 +47,9 @@ public:
 public:
     [[nodiscard]] QString password() const;
     [[nodiscard]] QString sharePath() const;
+    [[nodiscard]] QString shareWith() const;
+    [[nodiscard]] Sharee::Type shareType() const;
     [[nodiscard]] Share::Permissions desiredPermissions() const;
-    [[nodiscard]] ShareePtr sharee() const;
 
 public slots:
     void start();
@@ -83,6 +85,7 @@ private:
     QByteArray _folderId;
     QString _folderAlias;
     QString _shareWith;
+    Sharee::Type _shareType;
     Operation _operation;
     QString _sharePath;
     Share::Permissions _desiredPermissions = {};
@@ -93,7 +96,8 @@ private:
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeShareMetadataJob *> _subJobs;
     QSharedPointer<FolderMetadata> _topLevelFolderMetadata;
-    QPointer<Folder> _folder;
+    QPointer<SyncJournalDb> _journalDb;
+    QString _folderRemotePath;
 };
 
 }

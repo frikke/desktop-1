@@ -16,7 +16,8 @@
 #include "clientsideencryption.h"
 #include "clientsideencryptionjobs.h"
 #include "foldermetadata.h"
-#include "folderman.h"
+#include "common/syncjournalfilerecord.h"
+#include "common/syncjournaldb.h"
 
 namespace OCC
 {
@@ -24,18 +25,22 @@ Q_LOGGING_CATEGORY(lcUpdateE2eeShareMetadataJob, "nextcloud.gui.updatee2eesharem
 
 UpdateE2eeShareMetadataJob::UpdateE2eeShareMetadataJob(const AccountPtr &account,
                                 const QByteArray &folderId,
-                                const QString &folderAlias,
+                                SyncJournalDb *journalDb,
+                                const QString &folderRemotePath,
                                 const QString &shareWith,
                                 const Operation operation,
                                 const QString &sharePath,
+                                const Sharee::Type &shareType,
                                 const Share::Permissions desiredPermissions,
                                 const QString &password,
                                 QObject *parent)
     : QObject{parent}
     , _account(account)
     , _folderId(folderId)
-    , _folderAlias(folderAlias)
+    , _journalDb(journalDb)
+    , _folderRemotePath(folderRemotePath)
     , _shareWith(shareWith)
+    , _shareType(shareType)
     , _operation(operation)
     , _sharePath(sharePath)
     , _desiredPermissions(desiredPermissions)
@@ -57,20 +62,24 @@ QString UpdateE2eeShareMetadataJob::sharePath() const
     return _sharePath;
 }
 
+QString UpdateE2eeShareMetadataJob::shareWith() const
+{
+    return _shareWith;
+}
+
+Sharee::Type UpdateE2eeShareMetadataJob::shareType() const
+{
+    return _shareType;
+}
+
 Share::Permissions UpdateE2eeShareMetadataJob::desiredPermissions() const
 {
     return _desiredPermissions;
 }
 
-ShareePtr UpdateE2eeShareMetadataJob::sharee() const
-{
-    return _sharee;
-}
-
 void UpdateE2eeShareMetadataJob::start()
 {
-    _folder = FolderMan::instance()->folder(_folderAlias);
-    if (!_folder || !_folder->journalDb()) {
+    if (_journalDb) {
         emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
@@ -151,12 +160,12 @@ void UpdateE2eeShareMetadataJob::slotFetchFolderMetadata()
 void UpdateE2eeShareMetadataJob::slotMetadataReceived(const QJsonDocument &json, int statusCode)
 {
     qCDebug(lcUpdateE2eeShareMetadataJob) << "Metadata received, applying it to the result list";
-    if (!_folder || !_folder->journalDb()) {
+    if (!_journalDb) {
         emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
     SyncJournalFileRecord rec;
-    if (!_folder->journalDb()->getTopLevelE2eFolderRecord(_sharePath, &rec) || !rec.isValid()) {
+    if (!_journalDb->getTopLevelE2eFolderRecord(_sharePath, &rec) || !rec.isValid()) {
         emit finished(-1, tr("Could not find top level E2EE folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
@@ -201,16 +210,19 @@ void UpdateE2eeShareMetadataJob::slotMetadataError(const QByteArray &folderId, i
 
 void UpdateE2eeShareMetadataJob::slotScheduleSubJobs()
 {
-    const auto shareDbPath = _sharePath.mid(_folder->remotePath().size());
+    const auto shareDbPath = _sharePath.mid(_folderRemotePath.size());
 
-    [[maybeunused]] const auto result = _folder->journalDb()->getFilesBelowPath(shareDbPath.toUtf8(), [this](const SyncJournalFileRecord &record) -> void {
+    [[maybeunused]] const auto result = _journalDb->getFilesBelowPath(shareDbPath.toUtf8(), [this](const SyncJournalFileRecord &record) -> void {
         if (record.isDirectory()) {
+
             const auto reEncryptE2EeFolderMetatadaJob = new UpdateE2eeShareMetadataJob(_account,
                                                                                        record._fileId,
-                                                                                       _folderAlias,
-                                                                                       _sharee,
+                                                                                       _journalDb,
+                                                                                       _folderRemotePath,
+                                                                                       _shareWith,
                                                                                        UpdateE2eeShareMetadataJob::ReEncrypt,
-                                                                                       QString::fromUtf8(record._path));
+                                                                                       QString::fromUtf8(record._path),
+                                                                                       _shareType);
             reEncryptE2EeFolderMetatadaJob->setTopLevelFolderMetadata(_folderMetadata);
             reEncryptE2EeFolderMetatadaJob->setMetadataKeyForDecryption(_metadataKeyForDecryption);
             reEncryptE2EeFolderMetatadaJob->setParent(this);
@@ -229,11 +241,11 @@ void UpdateE2eeShareMetadataJob::slotLockFolder()
         emit finished(-1);
         return;
     }
-    if (!_folder || !_folder->journalDb()) {
+    if (!_journalDb) {
         emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
-    const auto lockJob = new LockEncryptFolderApiJob(_account, _folderId, _folder->journalDb(), _account->e2e()->_publicKey, this);
+    const auto lockJob = new LockEncryptFolderApiJob(_account, _folderId, _journalDb, _account->e2e()->_publicKey, this);
     connect(lockJob, &LockEncryptFolderApiJob::success, this, &UpdateE2eeShareMetadataJob::slotFolderLockedSuccessfully);
     connect(lockJob, &LockEncryptFolderApiJob::error, this, &UpdateE2eeShareMetadataJob::slotFolderLockedError);
     lockJob->start();
@@ -241,13 +253,13 @@ void UpdateE2eeShareMetadataJob::slotLockFolder()
 
 void UpdateE2eeShareMetadataJob::slotUnlockFolder()
 {
-    if (!_folder || !_folder->journalDb()) {
+    if (!_journalDb) {
         emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
 
     qCDebug(lcUpdateE2eeShareMetadataJob) << "Calling Unlock";
-    const auto unlockJob = new UnlockEncryptFolderApiJob(_account, _folderId, _folderToken, _folder->journalDb(), this);
+    const auto unlockJob = new UnlockEncryptFolderApiJob(_account, _folderId, _folderToken, _journalDb, this);
     connect(unlockJob, &UnlockEncryptFolderApiJob::success, [this](const QByteArray &folderId) {
         qCDebug(lcUpdateE2eeShareMetadataJob) << "Successfully Unlocked";
         _folderToken = "";

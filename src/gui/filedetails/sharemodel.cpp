@@ -844,8 +844,20 @@ void ShareModel::slotDeleteE2EeShare(const SharePtr &share) const
         }
     }
 
-    const auto removeE2eeShareJob =
-        new UpdateE2eeShareMetadataJob(account, _folderId, folderAlias, share->getShareWith()->shareWith(), UpdateE2eeShareMetadataJob::Remove, share->path());
+    auto folder = FolderMan::instance()->folder(folderAlias);
+    if (!folder || !folder->journalDb()) {
+        emit serverError(404, tr("Could not find local folder for %1").arg(share->path()));
+        return;
+    }
+
+    const auto removeE2eeShareJob = new UpdateE2eeShareMetadataJob(account,
+                                                                   _folderId,
+                                                                   folder->journalDb(),
+                                                                   folder->remotePath(),
+                                                                   share->path(),
+                                                                   UpdateE2eeShareMetadataJob::Remove,
+                                                                   share->path(),
+                                                                   share->getShareWith()->type());
     removeE2eeShareJob->setParent(_manager.data());
     removeE2eeShareJob->start();
     connect(removeE2eeShareJob, &UpdateE2eeShareMetadataJob::finished, this, [share, this](int code, const QString &message) {

@@ -14,11 +14,9 @@
 
 #include "updatemigratede2eemetadatajob.h"
 
-#include "gui/updatee2eesharemetadatajob.h"
-#include "gui/folderman.h"
+#include "updatee2eesharemetadatajob.h"
 
 #include "account.h"
-#include "gui/accountstate.h"
 #include "clientsideencryptionjobs.h"
 #include "clientsideencryption.h"
 #include "foldermetadata.h"
@@ -35,30 +33,23 @@ Q_LOGGING_CATEGORY(lcUpdateMigratedE2eeMetadataJob, "nextcloud.sync.propagator.u
 
 namespace OCC {
 
-UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const QByteArray &folderId, const QString &path)
+UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator,
+                                                             const QByteArray &folderId,
+                                                             const QString &path,
+                                                             const QString &folderRemotePath)
     : PropagatorJob(propagator)
     , _folderId(folderId)
     , _path(path)
+    , _folderRemotePath(folderRemotePath)
 {
 }
 
 void UpdateMigratedE2eeMetadataJob::start()
 {
-    const auto account = propagator()->account();
-    QString folderAlias;
-    for (const auto &f : FolderMan::instance()->map()) {
-        if (f->accountState()->account() != account) {
-            continue;
-        }
-        const auto folderPath = f->remotePath();
-        if (_path.startsWith(folderPath) && (_path == folderPath || folderPath.endsWith('/') || _path[folderPath.size()] == '/')) {
-            folderAlias = f->alias();
-        }
-    }
-
     const auto updateMedatadaAndSubfoldersJob = new UpdateE2eeShareMetadataJob(propagator()->account(),
                                                                                _folderId,
-                                                                               folderAlias,
+                                                                               propagator()->_journal,
+                                                                               _folderRemotePath,
                                                                                propagator()->account()->davUser(),
                                                                                UpdateE2eeShareMetadataJob::Add,
                                                                                _path);

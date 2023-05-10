@@ -495,8 +495,30 @@ void ShareManager::createE2EeShareJob(const QString &path,
                                       const QString &folderAlias,
                                       const QString &password)
 {
-    const auto createE2eeShareJob =
-        new UpdateE2eeShareMetadataJob(_account, folderId, folderAlias, sharee, UpdateE2eeShareMetadataJob::Add, path, permissions, password, this);
+    Folder *folder = nullptr;
+    for (const auto &f : FolderMan::instance()->map()) {
+        if (f->accountState()->account() != _account) {
+            continue;
+        }
+        folder = f;
+    }
+
+    if (!folder) {
+        emit serverError(0, "Failed creating share");
+        return;
+    }
+
+    const auto createE2eeShareJob = new UpdateE2eeShareMetadataJob(_account,
+                                                                   folderId,
+                                                                   folder->journalDb(),
+                                                                   folder->remotePath(),
+                                                                   sharee->shareWith(),
+                                                                   UpdateE2eeShareMetadataJob::Add,
+                                                                   path,
+                                                                   sharee->type(),
+                                                                   permissions,
+                                                                   password,
+                                                                   this);
     connect(createE2eeShareJob, &UpdateE2eeShareMetadataJob::finished, this, &ShareManager::slotCreateE2eeShareJobFinised);
     createE2eeShareJob->start();
 }
@@ -645,6 +667,7 @@ void ShareManager::slotOcsError(int statusCode, const QString &message)
     emit serverError(statusCode, message);
 }
 
+
 void ShareManager::slotCreateE2eeShareJobFinised(int statusCode, const QString &message)
 {
     const auto job = qobject_cast<UpdateE2eeShareMetadataJob *>(sender());
@@ -656,7 +679,7 @@ void ShareManager::slotCreateE2eeShareJobFinised(int statusCode, const QString &
     if (statusCode != 200) {
         emit serverError(statusCode, message);
     } else {
-        createShare(job->sharePath(), Share::ShareType(job->sharee()->type()), job->sharee()->shareWith(), job->desiredPermissions(), job->password());
+        createShare(job->sharePath(), Share::ShareType(job->shareType()), job->shareWith(), job->desiredPermissions(), job->password());
     }
 }
 }

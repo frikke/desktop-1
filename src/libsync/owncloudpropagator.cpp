@@ -23,6 +23,7 @@
 #include "propagateremotemkdir.h"
 #include "bulkpropagatorjob.h"
 #include "updatefiledropmetadata.h"
+#include "updatemigratede2eemetadatajob.h"
 #include "propagatorjobs.h"
 #include "filesystem.h"
 #include "common/utility.h"
