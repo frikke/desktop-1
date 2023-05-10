@@ -763,7 +763,7 @@ void FolderMetadata::setupEmptyMetadataV2()
 void FolderMetadata::setupEmptyMetadataV1()
 {
     qCDebug(lcCseMetadata) << "Settint up empty metadata v1";
-    QByteArray newMetadataPass = EncryptionHelper::generateRandom(metadataKeySize );
+    QByteArray newMetadataPass = EncryptionHelper::generateRandom(metadataKeySize);
     _metadataKeys.insert(0, newMetadataPass);
 
     QString publicKey = _account->e2e()->_publicKey.toPem().toBase64();
@@ -843,7 +843,7 @@ QByteArray FolderMetadata::handleEncryptionRequestV2()
     const QJsonDocument cipherTextDoc(cipherText);
 
     QByteArray authenticationTag;
-    const auto initializationVector = EncryptionHelper::generateRandom(metadataKeySize );
+    const auto initializationVector = EncryptionHelper::generateRandom(metadataKeySize);
     const auto encryptedCipherTextBase64 = encryptCipherText(cipherTextDoc.toJson(QJsonDocument::Compact), _metadataKey, initializationVector, authenticationTag);
     const auto decryptedCipherTextBase64 = decryptCipherText(encryptedCipherTextBase64, _metadataKey, initializationVector);
     const QJsonObject metadata{
@@ -1167,7 +1167,7 @@ void FolderMetadata::createNewMetadataKey()
         const QByteArray metadataKeyOldLimitedLength(_metadataKey.data(), metadataKeySize );
         _keyChecksums.remove(calcSha256(metadataKeyOldLimitedLength));
     }
-    _metadataKey = EncryptionHelper::generateRandom(metadataKeySize );
+    _metadataKey = EncryptionHelper::generateRandom(metadataKeySize);
     if (!_metadataKey.isEmpty() && _metadataKey.size() >= metadataKeySize ) {
         const QByteArray metadataKeyLimitedLength(_metadataKey.data(), metadataKeySize );
         _keyChecksums.insert(calcSha256(metadataKeyLimitedLength));
