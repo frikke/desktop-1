@@ -159,7 +159,7 @@ void FolderMetadata::setupExistingMetadata(const QByteArray &metadata)
 
     const auto versionString = QString::number(_versionFromMetadata);
 
-    if (versionString == QStringLiteral("1.0")) {
+    if (versionString == QStringLiteral("1.0") || versionString == QStringLiteral("1")) {
         setupExistingMetadataVersion1(metadata);
         return;
     } else if (versionString == QStringLiteral("1.2")) {
@@ -207,10 +207,15 @@ void FolderMetadata::setupExistingMetadataVersion1(const QByteArray &metadata)
             return;
         }
 
-        const auto lastMetadataKey = metadataKeys.keys().last();
-        const auto decryptedMetadataKeyBase64 = decryptData(metadataKeys.value(lastMetadataKey).toString().toLocal8Bit());
-        if (!decryptedMetadataKeyBase64.isEmpty()) {
-            _metadataKey = QByteArray::fromBase64(decryptedMetadataKeyBase64);
+        const auto lastMetadataKeyFromJson = metadataKeys.keys().last().toLocal8Bit();
+        if (!lastMetadataKeyFromJson.isEmpty()) {
+            const auto lastMetadataKeyValueFromJson = metadataKeys.value(lastMetadataKeyFromJson).toString().toLocal8Bit();
+            if (!lastMetadataKeyValueFromJson.isEmpty()) {
+                const auto lastMetadataKeyValueFromJsonBase64 = decryptData(QByteArray::fromBase64(lastMetadataKeyValueFromJson));
+                if (!lastMetadataKeyValueFromJsonBase64.isEmpty()) {
+                    _metadataKey = QByteArray::fromBase64(QByteArray::fromBase64(lastMetadataKeyValueFromJsonBase64));
+                }
+            }
         }
     }
 

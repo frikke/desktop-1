@@ -552,7 +552,7 @@ void DiscoverySingleDirectoryJob::directoryListingIteratedSlot(const QString &fi
             _fileId = map.value("id").toUtf8();
         }
         if (map.contains("is-encrypted") && map.value("is-encrypted") == QStringLiteral("1")) {
-            _isE2eEncrypted = SyncFileItem::EncryptionStatus::Encrypted;
+            _encryptionStatus = SyncFileItem::EncryptionStatus::Encrypted;
             Q_ASSERT(!_fileId.isEmpty());
         }
         if (map.contains("size")) {
@@ -661,7 +661,16 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
         topLevelFolderPath = QStringLiteral("/");
     }
 
-    _e2EeFolderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    const auto requiredMetadataVersion = [this]() {
+        if (_encryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2) {
+            return FolderMetadata::RequiredMetadataVersion::Version1_2;
+        } else if (_encryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0) {
+            return FolderMetadata::RequiredMetadataVersion::Version2_0;
+        }
+        return FolderMetadata::RequiredMetadataVersion::Version1;
+    }();
+
+    _e2EeFolderMetadata.reset(new FolderMetadata(_account, requiredMetadataVersion, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         _isFileDropDetected = _e2EeFolderMetadata->isFileDropPresent();
         const auto encryptedFiles = _e2EeFolderMetadata->files();

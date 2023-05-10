@@ -40,6 +40,7 @@ public:
     enum class RequiredMetadataVersion {
         Version1,
         Version1_2,
+        Version2_0,
     };
 
     FolderMetadata::FolderMetadata(AccountPtr account);

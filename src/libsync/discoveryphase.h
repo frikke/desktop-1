@@ -170,7 +170,7 @@ private slots:
 
 private:
 
-    [[nodiscard]] bool isE2eEncrypted() const { return _isE2eEncrypted != SyncFileItem::EncryptionStatus::NotEncrypted; }
+    [[nodiscard]] bool isE2eEncrypted() const { return _encryptionStatus != SyncFileItem::EncryptionStatus::NotEncrypted; }
 
     QVector<RemoteInfo> _results;
     QString _subPath;
@@ -186,7 +186,7 @@ private:
     // If this directory is an external storage (The first item has 'M' in its permission)
     bool _isExternalStorage = false;
     // If this directory is e2ee
-    SyncFileItem::EncryptionStatus _isE2eEncrypted = SyncFileItem::EncryptionStatus::NotEncrypted;
+    SyncFileItem::EncryptionStatus _encryptionStatus = SyncFileItem::EncryptionStatus::NotEncrypted;
     bool _isFileDropDetected = false;
     bool _encryptedMetadataNeedUpdate = false;
     // If set, the discovery will finish with an error

@@ -85,8 +85,19 @@ void PropagateDownloadEncrypted::checkFolderEncryptedMetadata(const QJsonDocumen
       return;
   }
 
+  const auto requiredMetadataVersion = [this]() {
+      if (_item->_e2eEncryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2) {
+          return FolderMetadata::RequiredMetadataVersion::Version1_2;
+      } else if (_item->_e2eEncryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0) {
+          return FolderMetadata::RequiredMetadataVersion::Version2_0;
+      }
+      return FolderMetadata::RequiredMetadataVersion::Version1;
+  }();
+
   const auto topLevelFolderPath = rec.path() == _parentPathInDb ? QStringLiteral("/") : rec.path();
-  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(), json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(),
+      requiredMetadataVersion, json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+
   connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, metadata, filename] {
       if (metadata->isMetadataSetup()) {
           const QVector<EncryptedFile> files = metadata->files();
