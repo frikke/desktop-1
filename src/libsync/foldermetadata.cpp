@@ -328,7 +328,7 @@ void FolderMetadata::setupExistingMetadataVersion1_2(const QByteArray &metadata)
     if (!metadataKeyFromJson.isEmpty()) {
         const auto decryptedMetadataKeyBase64 = decryptData(QByteArray::fromBase64(metadataKeyFromJson));
         if (!decryptedMetadataKeyBase64.isEmpty()) {
-            _metadataKey = decryptedMetadataKeyBase64;
+            _metadataKey = QByteArray::fromBase64((QByteArray::fromBase64(decryptedMetadataKeyBase64)));
         }
     }
 
