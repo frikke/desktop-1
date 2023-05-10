@@ -102,6 +102,8 @@ set(libsync_SRCS
     theme.cpp
     updatefiledropmetadata.h
     updatefiledropmetadata.cpp
+	updatemigratede2eemetadatajob.h
+	updatemigratede2eemetadatajob.cpp
     clientsideencryption.h
     clientsideencryption.cpp
     clientsideencryptionjobs.h

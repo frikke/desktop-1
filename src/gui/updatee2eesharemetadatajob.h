@@ -36,7 +36,7 @@ public:
     explicit UpdateE2eeShareMetadataJob(const AccountPtr &account,
                                 const QByteArray &folderId,
                                 const QString &folderAlias,
-                                const ShareePtr &sharee,
+                                const QString &_shareWith,
                                 const Operation operation,
                                 const QString &sharePath = {},
                                 const Share::Permissions desiredPermissions = {},
@@ -82,7 +82,7 @@ private:
     AccountPtr _account;
     QByteArray _folderId;
     QString _folderAlias;
-    ShareePtr _sharee;
+    QString _shareWith;
     Operation _operation;
     QString _sharePath;
     Share::Permissions _desiredPermissions = {};

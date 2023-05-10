@@ -25,7 +25,7 @@ Q_LOGGING_CATEGORY(lcUpdateE2eeShareMetadataJob, "nextcloud.gui.updatee2eesharem
 UpdateE2eeShareMetadataJob::UpdateE2eeShareMetadataJob(const AccountPtr &account,
                                 const QByteArray &folderId,
                                 const QString &folderAlias,
-                                const ShareePtr &sharee,
+                                const QString &shareWith,
                                 const Operation operation,
                                 const QString &sharePath,
                                 const Share::Permissions desiredPermissions,
@@ -35,7 +35,7 @@ UpdateE2eeShareMetadataJob::UpdateE2eeShareMetadataJob(const AccountPtr &account
     , _account(account)
     , _folderId(folderId)
     , _folderAlias(folderAlias)
-    , _sharee(sharee)
+    , _shareWith(shareWith)
     , _operation(operation)
     , _sharePath(sharePath)
     , _desiredPermissions(desiredPermissions)
@@ -78,7 +78,7 @@ void UpdateE2eeShareMetadataJob::start()
     switch (_operation) {
     case Operation::Add:
         connect(_account->e2e(), &ClientSideEncryption::certificateFetchedFromKeychain, this, &UpdateE2eeShareMetadataJob::slotCertificateFetchedFromKeychain);
-        _account->e2e()->fetchFromKeyChain(_account, _sharee->shareWith());
+        _account->e2e()->fetchFromKeyChain(_account, _shareWith);
         return;
     case Operation::Remove:
         slotLockFolder();
@@ -88,7 +88,7 @@ void UpdateE2eeShareMetadataJob::start()
         return;
     }
 
-    emit finished(404, tr("Invalid share metadata operation for a folder user %1, for folder %2").arg(_sharee->shareWith()).arg(QString::fromUtf8(_folderId)));
+    emit finished(404, tr("Invalid share metadata operation for a folder user %1, for folder %2").arg(_shareWith).arg(QString::fromUtf8(_folderId)));
 }
 
 void UpdateE2eeShareMetadataJob::setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata)
@@ -111,7 +111,7 @@ void UpdateE2eeShareMetadataJob::slotCertificateFetchedFromKeychain(const QSslCe
     disconnect(_account->e2e(), &ClientSideEncryption::certificateFetchedFromKeychain, this, &UpdateE2eeShareMetadataJob::slotCertificateFetchedFromKeychain);
     if (certificate.isNull()) {
         // get sharee's public key
-        _account->e2e()->getUsersPublicKeyFromServer(_account, {_sharee->shareWith()});
+        _account->e2e()->getUsersPublicKeyFromServer(_account, {_shareWith});
         connect(_account->e2e(), &ClientSideEncryption::certificatesFetchedFromServer, this, &UpdateE2eeShareMetadataJob::slotCertificatesFetchedFromServer);
         return;
     }
@@ -120,12 +120,12 @@ void UpdateE2eeShareMetadataJob::slotCertificateFetchedFromKeychain(const QSslCe
 
 void UpdateE2eeShareMetadataJob::slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results)
 {
-    const auto certificate = results.isEmpty() ? QSslCertificate{} : results.value(_sharee->shareWith());
+    const auto certificate = results.isEmpty() ? QSslCertificate{} : results.value(_shareWith);
     if (certificate.isNull()) {
         emit certificateReady(certificate);
         return;
     }
-    _account->e2e()->writeCertificate(_account, _sharee->shareWith(), certificate);
+    _account->e2e()->writeCertificate(_account, _shareWith, certificate);
     connect(_account->e2e(), &ClientSideEncryption::certificateWriteComplete, this, &UpdateE2eeShareMetadataJob::certificateReady);
 }
 
@@ -134,7 +134,7 @@ void UpdateE2eeShareMetadataJob::slotCertificateReady(const QSslCertificate cert
     _shareeCertificate = certificate;
 
     if (certificate.isNull()) {
-        emit finished(404, tr("Could not fetch publicKey for user %1").arg(_sharee->shareWith()));
+        emit finished(404, tr("Could not fetch publicKey for user %1").arg(_shareWith));
     } else {
         slotLockFolder();
     }
@@ -176,13 +176,13 @@ void UpdateE2eeShareMetadataJob::slotMetadataReceived(const QJsonDocument &json,
             bool result = false;
             _metadataKeyForDecryption = _folderMetadata->metadataKey();
             if (_operation == Operation::Add) {
-                result = _folderMetadata->addUser(_sharee->shareWith(), _shareeCertificate);
+                result = _folderMetadata->addUser(_shareWith, _shareeCertificate);
             } else if (_operation == Operation::Remove) {
-                result = _folderMetadata->removeUser(_sharee->shareWith());
+                result = _folderMetadata->removeUser(_shareWith);
             }
 
             if (!result) {
-                emit finished(403, tr("Could not add or remove a folder user %1, for folder %2").arg(_sharee->shareWith()).arg(_sharePath));
+                emit finished(403, tr("Could not add or remove a folder user %1, for folder %2").arg(_shareWith).arg(_sharePath));
                 return;
             }
 
