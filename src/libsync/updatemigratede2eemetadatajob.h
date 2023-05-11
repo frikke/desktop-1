@@ -16,8 +16,6 @@
 
 #include "owncloudpropagator.h"
 
-#include <QScopedPointer>
-
 class QNetworkReply;
 
 namespace OCC {
@@ -29,7 +27,7 @@ class OWNCLOUDSYNC_EXPORT UpdateMigratedE2eeMetadataJob : public PropagatorJob
     Q_OBJECT
 
 public:
-    explicit UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const QByteArray &folderId, const QString &path, const QString &folderRemotePath);
+    explicit UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const QString &path, const QString &folderRemotePath);
 
     bool scheduleSelfOrChild() override;
 
@@ -37,9 +35,11 @@ public:
 
 private slots:
     void start();
+    void startUpdateFolderUsersMetadataJob(const QByteArray &folderId);
+    void slotFolderEncryptedIdReceived(const QStringList &list);
+    void slotFolderEncryptedIdError(QNetworkReply *reply);
 
 private:
-    QByteArray _folderId;
     QString _path;
     QString _folderRemotePath;
 };

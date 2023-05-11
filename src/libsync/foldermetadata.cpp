@@ -104,7 +104,7 @@ FolderMetadata::FolderMetadata(AccountPtr account,
                                const QByteArray &metadataKeyForDecryption,
                                QObject *parent)
     : FolderMetadata(account,
-                     RequiredMetadataVersion::Version1_2,
+                     RequiredMetadataVersion::Version2_0,
                      metadata,
                      topLevelFolderPath,
                      topLevelFolderMetadata,
@@ -188,14 +188,14 @@ void FolderMetadata::setupExistingMetadataVersion1And2(const QByteArray &metadat
 
     const auto metadataKeyFromJson = metadataObj[metadataKeyKey].toString().toLocal8Bit();
     if (!metadataKeyFromJson.isEmpty()) {
-        const auto decryptedMetadataKeyBase64 = decryptData(metadataKeyFromJson);
+        const auto decryptedMetadataKeyBase64 = decryptData(QByteArray::fromBase64(metadataKeyFromJson));
         if (!decryptedMetadataKeyBase64.isEmpty()) {
-            _metadataKey = QByteArray::fromBase64(decryptedMetadataKeyBase64);
+            _metadataKey = QByteArray::fromBase64(QByteArray::fromBase64(decryptedMetadataKeyBase64));
         }
     }
 
     auto migratedMetadata = false;
-    if (_metadataKey.isEmpty() && _requiredMetadataVersion != RequiredMetadataVersion::Version1_2) {
+    if (_metadataKey.isEmpty() && static_cast<int>(_versionFromMetadata) < static_cast<int>(_requiredMetadataVersion)) {
         qCDebug(lcCseMetadata()) << "Migrating from v1.1 to v1.2";
         migratedMetadata = true;
 
@@ -650,10 +650,6 @@ void FolderMetadata::setupEmptyMetadataV1()
 QByteArray FolderMetadata::encryptedMetadata()
 {
     qCDebug(lcCseMetadata()) << "Generating metadata";
-    if ((isTopLevelFolder() && versionFromMetadata() == 1) || _topLevelFolderMetadata && _topLevelFolderMetadata->versionFromMetadata() == 1) {
-        return handleEncryptionRequestV1();
-    }
-
     return handleEncryptionRequestV2();
 }
 
@@ -763,7 +759,7 @@ QByteArray FolderMetadata::handleEncryptionRequestV1()
 {
     qCDebug(lcCseMetadata) << "Generating metadata for v1 encrypted folder";
 
-    if (_metadataKey.isEmpty() || _metadataKeys.isEmpty()) {
+    if (_metadataKey.isEmpty() && _metadataKeys.isEmpty()) {
         qCDebug(lcCseMetadata) << "Metadata generation failed! Empty metadata key!";
         return {};
     }

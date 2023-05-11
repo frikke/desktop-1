@@ -666,7 +666,7 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
             item->_status = SyncFileItem::NormalError;
             emit itemCompleted(item, OCC::ErrorCategory::GenericError);
         } else {
-            directoryPropagationJob->appendJob(new UpdateFileDropMetadataJob(this, item->_file));
+            directoryPropagationJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, fullRemotePath(item->_file), remotePath()));
             item->_instruction = CSYNC_INSTRUCTION_NONE;
             _anotherSyncNeeded = true;
         }

@@ -67,7 +67,7 @@ void EncryptFolderJob::slotEncryptionFlagSuccess(const QByteArray &fileId)
         qCWarning(lcEncryptFolderJob) << "No valid record found in local DB for fileId" << fileId;
     }
 
-    rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV1_2;
+    rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
     const auto result = _journal->setFileRecord(rec);
     if (!result) {
         qCWarning(lcEncryptFolderJob) << "Error when setting the file record to the database" << rec._path << result.error();

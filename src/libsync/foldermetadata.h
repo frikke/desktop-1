@@ -70,6 +70,8 @@ public:
 
     [[nodiscard]] bool moveFromFileDropToFiles();
 
+    [[nodiscard]] bool isTopLevelFolder() const;
+
     const QByteArray &fileDrop() const;
 
     bool addUser(const QString &userId, const QSslCertificate certificate);
@@ -104,8 +106,6 @@ private:
     [[nodiscard]] EncryptedFile parseFileAndFolderFromJson(const QString &encryptedFilename, const QJsonValue &fileJSON) const;
 
     [[nodiscard]] QJsonObject convertFileToJsonObject(const EncryptedFile *encryptedFile, const QByteArray &metadataKey) const;
-
-    [[nodiscard]] bool isTopLevelFolder() const;
     
     QByteArray handleEncryptionRequestV2();
     QByteArray handleEncryptionRequestV1();

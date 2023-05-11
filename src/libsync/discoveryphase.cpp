@@ -664,15 +664,15 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
     const auto requiredMetadataVersion = [this]() {
         if (_encryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2) {
             return FolderMetadata::RequiredMetadataVersion::Version1_2;
-        } else if (_encryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0) {
+        } else {
             return FolderMetadata::RequiredMetadataVersion::Version2_0;
         }
-        return FolderMetadata::RequiredMetadataVersion::Version1;
     }();
 
     _e2EeFolderMetadata.reset(new FolderMetadata(_account, requiredMetadataVersion, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         _isFileDropDetected = _e2EeFolderMetadata->isFileDropPresent();
+        _encryptedMetadataNeedUpdate = _e2EeFolderMetadata->encryptedMetadataNeedUpdate() && _e2EeFolderMetadata->isTopLevelFolder();
         const auto encryptedFiles = _e2EeFolderMetadata->files();
 
         const auto findEncryptedFile = [=](const QString &name) {

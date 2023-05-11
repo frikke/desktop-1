@@ -178,7 +178,7 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
         encryptedFile.initializationVector = EncryptionHelper::generateRandom(16);
 
         _item->_encryptedFileName = _remoteParentPath + QLatin1Char('/') + encryptedFile.encryptedFilename;
-        _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2;
+        _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0;
 
         qCDebug(lcPropagateUploadEncrypted) << "Creating the encrypted file.";
 

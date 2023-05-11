@@ -60,7 +60,7 @@ QVariant UpdateE2eeFolderUsersMetadataJob::userData() const
 
 void UpdateE2eeFolderUsersMetadataJob::start()
 {
-    if (_journalDb) {
+    if (!_journalDb) {
         emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
@@ -162,8 +162,8 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
     const auto topLevelFolderPath = rec.path() == pathSanitized ? QStringLiteral("/") : rec.path();
     _folderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath, _topLevelFolderMetadata, _metadataKeyForDecryption));
     connect(_folderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
-        if (_folderMetadata->versionFromMetadata() < 2) {
-            emit finished(405, tr("Could not update folder users metadata for legacy encrypted folder %1. Migration is required.").arg(_path));
+        if (!_folderMetadata->isMetadataSetup()) {
+            slotUnlockFolder();
             return;
         }
         if (_operation == Operation::ReEncrypt) {
@@ -305,7 +305,9 @@ void UpdateE2eeFolderUsersMetadataJob::slotFolderUnlocked(const QByteArray &fold
 
 void UpdateE2eeFolderUsersMetadataJob::slotUpdateFolderMetadata()
 {
-    const auto job = new UpdateMetadataApiJob(_account, _folderId, _folderMetadata->encryptedMetadata(), _folderToken);
+    const auto encryptedMetadata = _folderMetadata->encryptedMetadata();
+    if (encryptedMetadata.isEmpty()) { }
+    const auto job = new UpdateMetadataApiJob(_account, _folderId, encryptedMetadata, _folderToken);
     connect(job, &UpdateMetadataApiJob::success, this, &UpdateE2eeFolderUsersMetadataJob::slotUpdateMetadataSuccess);
     connect(job, &UpdateMetadataApiJob::error, this, &UpdateE2eeFolderUsersMetadataJob::slotUpdateMetadataError);
     job->start();
