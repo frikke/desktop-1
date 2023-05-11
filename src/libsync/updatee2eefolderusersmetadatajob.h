@@ -26,33 +26,29 @@
 namespace OCC {
 class FolderMetadata;
 class SyncJournalDb;
-class OWNCLOUDSYNC_EXPORT UpdateE2eeShareMetadataJob : public QObject
+class OWNCLOUDSYNC_EXPORT UpdateE2eeFolderUsersMetadataJob : public QObject
 {
     Q_OBJECT
 
 public:
     enum Operation { Invalid = -1, Add = 0, Remove, ReEncrypt };
-    explicit UpdateE2eeShareMetadataJob(const AccountPtr &account,
-                                const QByteArray &folderId,
-                                SyncJournalDb *journalDb,
-                                const QString &folderRemotePath,
-                                const QString &_shareWith,
-                                const Operation operation,
-                                const QString &sharePath = {},
-                                const Sharee::Type &shareType = Sharee::Type::Invalid,
-                                const Share::Permissions desiredPermissions = {},
-                                const QString &password = {},
-                                QObject *parent = nullptr);
+    explicit UpdateE2eeFolderUsersMetadataJob(const AccountPtr &account,
+                                        SyncJournalDb *journalDb,
+                                        const QByteArray &folderId,
+                                        const QString &syncFolderRemotePath,
+                                        const Operation operation,
+                                        const QString &path = {},
+                                        const QString &folderUserId = {},
+                                        QSslCertificate certificate = QSslCertificate{},
+                                        QObject *parent = nullptr);
 
 public:
-    [[nodiscard]] QString password() const;
-    [[nodiscard]] QString sharePath() const;
-    [[nodiscard]] QString shareWith() const;
-    [[nodiscard]] Sharee::Type shareType() const;
-    [[nodiscard]] Share::Permissions desiredPermissions() const;
+    [[nodiscard]] QString path() const;
+    [[nodiscard]] QVariant userData() const;
 
 public slots:
     void start();
+    void setUserData(const QVariant &userData);
     void setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata);
     void setFolderToken(const QByteArray &folderToken);
     void setMetadataKeyForDecryption(const QByteArray &metadataKey);
@@ -60,7 +56,7 @@ public slots:
 private slots:
     void slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results);
     void slotCertificateFetchedFromKeychain(const QSslCertificate certificate);
-    void slotCertificateReady(const QSslCertificate certificate);
+    void slotCertificateReady();
     void slotFetchFolderMetadata();
     void slotMetadataReceived(const QJsonDocument &json, int statusCode);
     void slotMetadataError(const QByteArray &folderId, int httpReturnCode);
@@ -77,27 +73,24 @@ private slots:
     void slotSubJobFinished(int code, const QString &message = {});
 
 private: signals:
-    void certificateReady(QSslCertificate certificate);
+    void certificateReady();
     void finished(int code, const QString &message = {});
 
 private:
     AccountPtr _account;
+    QPointer<SyncJournalDb> _journalDb;
     QByteArray _folderId;
-    QString _folderAlias;
-    QString _shareWith;
-    Sharee::Type _shareType;
+    QString _syncFolderRemotePath;
     Operation _operation;
-    QString _sharePath;
-    Share::Permissions _desiredPermissions = {};
-    QString _password;
-    QSslCertificate _shareeCertificate;
+    QString _path;
+    QString _folderUserId;
+    QSslCertificate _folderUserCertificate;
     QByteArray _folderToken;
     QByteArray _metadataKeyForDecryption;
     QSharedPointer<FolderMetadata> _folderMetadata;
-    QSet<UpdateE2eeShareMetadataJob *> _subJobs;
+    QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
     QSharedPointer<FolderMetadata> _topLevelFolderMetadata;
-    QPointer<SyncJournalDb> _journalDb;
-    QString _folderRemotePath;
+    QVariant _userData;
 };
 
 }

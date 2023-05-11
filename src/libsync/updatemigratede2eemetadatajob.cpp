@@ -14,7 +14,7 @@
 
 #include "updatemigratede2eemetadatajob.h"
 
-#include "updatee2eesharemetadatajob.h"
+#include "updatee2eefolderusersmetadatajob.h"
 
 #include "account.h"
 #include "clientsideencryptionjobs.h"
@@ -46,16 +46,16 @@ UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator 
 
 void UpdateMigratedE2eeMetadataJob::start()
 {
-    const auto updateMedatadaAndSubfoldersJob = new UpdateE2eeShareMetadataJob(propagator()->account(),
-                                                                               _folderId,
-                                                                               propagator()->_journal,
-                                                                               _folderRemotePath,
-                                                                               propagator()->account()->davUser(),
-                                                                               UpdateE2eeShareMetadataJob::Add,
-                                                                               _path);
+    const auto updateMedatadaAndSubfoldersJob = new UpdateE2eeFolderUsersMetadataJob(propagator()->account(),
+                                                                                     propagator()->_journal,
+                                                                                     _folderId,
+                                                                                     _folderRemotePath,
+                                                                                     UpdateE2eeFolderUsersMetadataJob::Add,
+                                                                                     propagator()->account()->davUser(),
+                                                                                     _path);
     updateMedatadaAndSubfoldersJob->setParent(this);
     updateMedatadaAndSubfoldersJob->start();
-    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeShareMetadataJob::finished, this, [this]() {
+    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this]() {
         emit finished(SyncFileItem::Status::Success);
     });
 }

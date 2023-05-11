@@ -67,6 +67,8 @@ public:
 
     using Permissions = SharePermissions;
 
+    Q_ENUM(Permissions);
+
     /*
      * Constructor for shares
      */

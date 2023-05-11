@@ -21,7 +21,7 @@
 #include "folderman.h"
 #include "theme.h"
 #include "wordlist.h"
-#include "updatee2eesharemetadatajob.h"
+#include "updatee2eefolderusersmetadatajob.h"
 
 namespace {
 
@@ -850,17 +850,16 @@ void ShareModel::slotDeleteE2EeShare(const SharePtr &share) const
         return;
     }
 
-    const auto removeE2eeShareJob = new UpdateE2eeShareMetadataJob(account,
-                                                                   _folderId,
-                                                                   folder->journalDb(),
-                                                                   folder->remotePath(),
-                                                                   share->path(),
-                                                                   UpdateE2eeShareMetadataJob::Remove,
-                                                                   share->path(),
-                                                                   share->getShareWith()->type());
+    const auto removeE2eeShareJob = new UpdateE2eeFolderUsersMetadataJob(account,
+                                                                         folder->journalDb(),
+                                                                         _folderId,
+                                                                         folder->remotePath(),
+                                                                         UpdateE2eeFolderUsersMetadataJob::Remove,
+                                                                         share->path(),
+                                                                         share->getShareWith()->shareWith());
     removeE2eeShareJob->setParent(_manager.data());
     removeE2eeShareJob->start();
-    connect(removeE2eeShareJob, &UpdateE2eeShareMetadataJob::finished, this, [share, this](int code, const QString &message) {
+    connect(removeE2eeShareJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [share, this](int code, const QString &message) {
         if (code != 200) {
             qCWarning(lcShareModel) << "Could not remove share from E2EE folder's metadata!";
             emit serverError(code, message);
