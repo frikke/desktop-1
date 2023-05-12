@@ -31,16 +31,7 @@ class QFile;
 
 namespace OCC {
 
-/**
- * Tags for checksum headers values.
- * They are here for being shared between Upload- and Download Job
- */
-static const char checkSumMD5C[] = "MD5";
-static const char checkSumSHA1C[] = "SHA1";
-static const char checkSumSHA2C[] = "SHA256";
-static const char checkSumSHA3C[] = "SHA3-256";
-static const char checkSumAdlerC[] = "Adler32";
-
+class ChecksumCalculator;
 class SyncJournalDb;
 
 /**
@@ -130,6 +121,8 @@ private:
 
     // watcher for the checksum calculation thread
     QFutureWatcher<QByteArray> _watcher;
+
+    QScopedPointer<ChecksumCalculator> _checksumCalculator;
 };
 
 /**

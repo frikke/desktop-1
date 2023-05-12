@@ -18,6 +18,7 @@
 #include "config.h"
 #include "filesystembase.h"
 #include "common/checksums.h"
+#include "checksumcalculator.h"
 #include "asserts.h"
 
 #include <QLoggingCategory>
@@ -250,22 +251,9 @@ void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
     // awkward with the C++ standard we're on
     auto sharedDevice = QSharedPointer<QIODevice>(device.release());
 
-    // Bug: The thread will keep running even if ComputeChecksum is deleted.
-    auto type = checksumType();
-    _watcher.setFuture(QtConcurrent::run([sharedDevice, type]() {
-        if (!sharedDevice->open(QIODevice::ReadOnly)) {
-            if (auto file = qobject_cast<QFile *>(sharedDevice.data())) {
-                qCWarning(lcChecksums) << "Could not open file" << file->fileName()
-                        << "for reading to compute a checksum" << file->errorString();
-            } else {
-                qCWarning(lcChecksums) << "Could not open device" << sharedDevice.data()
-                        << "for reading to compute a checksum" << sharedDevice->errorString();
-            }
-            return QByteArray();
-        }
-        auto result = ComputeChecksum::computeNow(sharedDevice.data(), type);
-        sharedDevice->close();
-        return result;
+    _checksumCalculator.reset(new ChecksumCalculator(sharedDevice, _checksumType));
+    _watcher.setFuture(QtConcurrent::run([this]() {
+        return _checksumCalculator->calculate();
     }));
 }
 

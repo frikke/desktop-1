@@ -11,6 +11,7 @@
 
 #include "common/checksums.h"
 #include "networkjobs.h"
+#include "common/checksumconsts.h"
 #include "common/utility.h"
 #include "filesystem.h"
 #include "propagatorjobs.h"
