@@ -187,27 +187,25 @@ QByteArray ComputeChecksum::checksumType() const
 void ComputeChecksum::start(const QString &filePath)
 {
     qCInfo(lcChecksums) << "Computing" << checksumType() << "checksum of" << filePath << "in a thread";
-    startImpl(std::make_unique<QFile>(filePath));
+    startImpl(QSharedPointer<QFile>::create(filePath));
 }
 
-void ComputeChecksum::start(std::unique_ptr<QIODevice> device)
+void ComputeChecksum::start(QSharedPointer<QIODevice> device)
 {
     ENFORCE(device);
     qCInfo(lcChecksums) << "Computing" << checksumType() << "checksum of device" << device.get() << "in a thread";
     ASSERT(!device->parent());
 
-    startImpl(std::move(device));
+    startImpl(device);
 }
 
-void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
+void ComputeChecksum::startImpl(QSharedPointer<QIODevice> device)
 {
     connect(&_watcher, &QFutureWatcherBase::finished,
         this, &ComputeChecksum::slotCalculationDone,
         Qt::UniqueConnection);
 
-    // We'd prefer to move the unique_ptr into the lambda, but that's
-    // awkward with the C++ standard we're on
-    _checksumCalculator.reset(new ChecksumCalculator(QSharedPointer<QIODevice>(device.release()), _checksumType));
+    _checksumCalculator.reset(new ChecksumCalculator(device, _checksumType));
     _watcher.setFuture(QtConcurrent::run([this]() {
         return _checksumCalculator->calculate();
     }));
@@ -215,13 +213,7 @@ void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
 
 QByteArray ComputeChecksum::computeNowOnFile(const QString &filePath, const QByteArray &checksumType)
 {
-    const auto file = QSharedPointer<QFile>::create(filePath);
-    if (!file->open(QIODevice::ReadOnly)) {
-        qCWarning(lcChecksums) << "Could not open file" << filePath << "for reading and computing checksum" << file->errorString();
-        return QByteArray();
-    }
-
-    return computeNow(file, checksumType);
+    return computeNow(QSharedPointer<QFile>::create(filePath), checksumType);
 }
 
 QByteArray ComputeChecksum::computeNow(QSharedPointer<QIODevice> device, const QByteArray &checksumType)
@@ -278,10 +270,11 @@ void ValidateChecksumHeader::start(const QString &filePath, const QByteArray &ch
         calculator->start(filePath);
 }
 
-void ValidateChecksumHeader::start(std::unique_ptr<QIODevice> device, const QByteArray &checksumHeader)
+void ValidateChecksumHeader::start(QSharedPointer<QIODevice> device, const QByteArray &checksumHeader)
 {
-    if (auto calculator = prepareStart(checksumHeader))
-        calculator->start(std::move(device));
+    if (auto calculator = prepareStart(checksumHeader)) {
+        calculator->start(device);
+    }
 }
 
 QByteArray ValidateChecksumHeader::calculatedChecksumType() const

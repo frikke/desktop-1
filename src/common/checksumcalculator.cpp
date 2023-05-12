@@ -76,7 +76,12 @@ QByteArray ChecksumCalculator::calculate()
         return result;
     }
 
-    if (!_device->open(QIODevice::ReadOnly)) {
+    Q_ASSERT(!_device->isOpen());
+    if (_device->isOpen()) {
+        qWarning() << "Device already open. Ignoring.";
+    }
+
+    if (!_device->isOpen() && !_device->open(QIODevice::ReadOnly)) {
         if (auto file = qobject_cast<QFile *>(_device.data())) {
             qWarning() << "Could not open file" << file->fileName() << "for reading to compute a checksum" << file->errorString();
         } else {
@@ -85,20 +90,26 @@ QByteArray ChecksumCalculator::calculate()
         return result;
     }
 
+    bool isAnyChunkAdded = false;
+
     for (;;) {
         QMutexLocker locker(&_deviceMutex);
         if (!_device->isOpen() || _device->atEnd()) {
             break;
         }
         const auto toRead = qMin(_device->bytesAvailable(), bufSize);
+        if (toRead <= 0) {
+            break;
+        }
         QByteArray buf(toRead, Qt::Uninitialized);
         const auto sizeRead = _device->read(buf.data(), toRead);
         if (sizeRead <= 0) {
-            return result;
+            break;
         }
         if (!addChunk(buf, sizeRead)) {
-            return result;
+            break;
         }
+        isAnyChunkAdded = true;
     }
 
     {
@@ -108,19 +119,21 @@ QByteArray ChecksumCalculator::calculate()
         }
     }
 
+    if (isAnyChunkAdded) {
+        if (_algorithmType == AlgorithmType::Adler32) {
+            result = QByteArray::number(_adlerHash, 16);
+        } else {
+            Q_ASSERT(_cryptographicHash);
+            if (_cryptographicHash) {
+                result = _cryptographicHash->result().toHex();
+            }
+        }
+    }
+
     {
         QMutexLocker locker(&_deviceMutex);
         if (_device->isOpen()) {
             _device->close();
-        }
-    }
-
-    if (_algorithmType == AlgorithmType::Adler32) {
-        result = QByteArray::number(_adlerHash, 16);
-    } else {
-        Q_ASSERT(_cryptographicHash);
-        if (_cryptographicHash) {
-            result = _cryptographicHash->result().toHex();
         }
     }
 

@@ -89,7 +89,7 @@ public:
      * The device ownership transfers into the thread that
      * will compute the checksum. It must not have a parent.
      */
-    void start(std::unique_ptr<QIODevice> device);
+    void start(QSharedPointer<QIODevice> device);
 
     /**
      * Computes the checksum synchronously.
@@ -108,7 +108,7 @@ private slots:
     void slotCalculationDone();
 
 private:
-    void startImpl(std::unique_ptr<QIODevice> device);
+    void startImpl(QSharedPointer<QIODevice> device);
 
     QByteArray _checksumType;
 
@@ -153,7 +153,7 @@ public:
      * The device ownership transfers into the thread that
      * will compute the checksum. It must not have a parent.
      */
-    void start(std::unique_ptr<QIODevice> device, const QByteArray &checksumHeader);
+    void start(QSharedPointer<QIODevice> device, const QByteArray &checksumHeader);
 
     [[nodiscard]] QByteArray calculatedChecksumType() const;
     [[nodiscard]] QByteArray calculatedChecksum() const;

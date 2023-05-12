@@ -76,6 +76,7 @@ void DiskFileModifier::setContents(const QString &relativePath, char contentChar
     qint64 size = file.size();
     file.open(QFile::WriteOnly);
     file.write(QByteArray {}.fill(contentChar, size));
+    file.close();
 }
 
 void DiskFileModifier::appendByte(const QString &relativePath)
@@ -86,6 +87,7 @@ void DiskFileModifier::appendByte(const QString &relativePath)
     QByteArray contents = file.read(1);
     file.seek(file.size());
     file.write(contents);
+    file.close();
 }
 
 void DiskFileModifier::mkdir(const QString &relativePath)
