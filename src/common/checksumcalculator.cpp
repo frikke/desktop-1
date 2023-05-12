@@ -90,8 +90,9 @@ QByteArray ChecksumCalculator::calculate()
         if (!_device->isOpen() || _device->atEnd()) {
             break;
         }
-        QByteArray buf(bufSize, Qt::Uninitialized);
-        auto sizeRead = _device->read(buf.data(), bufSize);
+        const auto toRead = qMin(_device->bytesAvailable(), bufSize);
+        QByteArray buf(toRead, Qt::Uninitialized);
+        const auto sizeRead = _device->read(buf.data(), toRead);
         if (sizeRead <= 0) {
             return result;
         }
