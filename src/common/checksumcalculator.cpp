@@ -114,6 +114,15 @@ QByteArray ChecksumCalculator::calculate()
         }
     }
 
+    if (_algorithmType == AlgorithmType::Adler32) {
+        result = QByteArray::number(_adlerHash, 16);
+    } else {
+        Q_ASSERT(_cryptographicHash);
+        if (_cryptographicHash) {
+            result = _cryptographicHash->result().toHex();
+        }
+    }
+
     return result;
 }
 
