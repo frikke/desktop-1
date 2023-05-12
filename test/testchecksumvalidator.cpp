@@ -206,6 +206,7 @@ using namespace OCC::Utility;
         adler.append(":");
         adler.append(_expected);
 
+        sharedFile->open(QIODevice::ReadOnly);
         sharedFile->seek(0);
         _successDown = false;
         vali->start(_testfile, adler);
