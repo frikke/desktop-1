@@ -207,9 +207,7 @@ void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
 
     // We'd prefer to move the unique_ptr into the lambda, but that's
     // awkward with the C++ standard we're on
-    const auto sharedDevice = QSharedPointer<QIODevice>(device.release());
-
-    _checksumCalculator.reset(new ChecksumCalculator(sharedDevice, _checksumType));
+    _checksumCalculator.reset(new ChecksumCalculator(QSharedPointer<QIODevice>(device.release()), _checksumType));
     _watcher.setFuture(QtConcurrent::run([this]() {
         return _checksumCalculator->calculate();
     }));
@@ -217,25 +215,23 @@ void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
 
 QByteArray ComputeChecksum::computeNowOnFile(const QString &filePath, const QByteArray &checksumType)
 {
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        qCWarning(lcChecksums) << "Could not open file" << filePath << "for reading and computing checksum" << file.errorString();
+    const auto file = QSharedPointer<QFile>::create(filePath);
+    if (!file->open(QIODevice::ReadOnly)) {
+        qCWarning(lcChecksums) << "Could not open file" << filePath << "for reading and computing checksum" << file->errorString();
         return QByteArray();
     }
 
-    return computeNow(&file, checksumType);
+    return computeNow(file, checksumType);
 }
 
-QByteArray ComputeChecksum::computeNow(QIODevice *device, const QByteArray &checksumType)
+QByteArray ComputeChecksum::computeNow(QSharedPointer<QIODevice> device, const QByteArray &checksumType)
 {
     if (!checksumComputationEnabled()) {
         qCWarning(lcChecksums) << "Checksum computation disabled by environment variable";
         return QByteArray();
     }
 
-    const auto sharedDevice = QSharedPointer<QIODevice>(device);
-    ChecksumCalculator checksumCalculator(sharedDevice, checksumType);
-
+    ChecksumCalculator checksumCalculator(device, checksumType);
     return checksumCalculator.calculate();
 }
 

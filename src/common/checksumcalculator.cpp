@@ -53,7 +53,7 @@ ChecksumCalculator::ChecksumCalculator(QSharedPointer<QIODevice> sharedDevice, c
         _algorithmType = AlgorithmType::SHA256;
     } else if (checksumTypeName == checkSumSHA3C) {
         _algorithmType = AlgorithmType::SHA3_256;
-    } else if (checksumTypeName == checksumTypeName) {
+    } else if (checksumTypeName == checkSumAdlerC) {
         _algorithmType = AlgorithmType::Adler32;
     }
 

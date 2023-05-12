@@ -94,7 +94,7 @@ public:
     /**
      * Computes the checksum synchronously.
      */
-    static QByteArray computeNow(QIODevice *device, const QByteArray &checksumType);
+    static QByteArray computeNow(QSharedPointer<QIODevice> device, const QByteArray &checksumType);
 
     /**
      * Computes the checksum synchronously on file. Convenience wrapper for computeNow().
