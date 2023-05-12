@@ -28,7 +28,7 @@
 class QCryptographicHash;
 
 namespace OCC {
-class ChecksumCalculator
+class OCSYNC_EXPORT ChecksumCalculator
 {
     Q_DISABLE_COPY(ChecksumCalculator)
 

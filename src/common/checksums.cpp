@@ -91,48 +91,6 @@ Q_LOGGING_CATEGORY(lcChecksums, "nextcloud.sync.checksums", QtInfoMsg)
 
 #define BUFSIZE qint64(500 * 1024) // 500 KiB
 
-static QByteArray calcCryptoHash(QIODevice *device, QCryptographicHash::Algorithm algo)
-{
-     QByteArray arr;
-     QCryptographicHash crypto( algo );
-
-     if (crypto.addData(device)) {
-         arr = crypto.result().toHex();
-     }
-     return arr;
- }
-
-QByteArray calcMd5(QIODevice *device)
-{
-    return calcCryptoHash(device, QCryptographicHash::Md5);
-}
-
-QByteArray calcSha1(QIODevice *device)
-{
-    return calcCryptoHash(device, QCryptographicHash::Sha1);
-}
-
-#ifdef ZLIB_FOUND
-QByteArray calcAdler32(QIODevice *device)
-{
-    if (device->size() == 0)
-    {
-        return QByteArray();
-    }
-    QByteArray buf(BUFSIZE, Qt::Uninitialized);
-
-    unsigned int adler = adler32(0L, Z_NULL, 0);
-    qint64 size = 0;
-    while (!device->atEnd()) {
-        size = device->read(buf.data(), BUFSIZE);
-        if (size > 0)
-            adler = adler32(adler, (const Bytef *)buf.data(), size);
-    }
-
-    return QByteArray::number(adler, 16);
-}
-#endif
-
 QByteArray makeChecksumHeader(const QByteArray &checksumType, const QByteArray &checksum)
 {
     if (checksumType.isEmpty() || checksum.isEmpty())
@@ -249,7 +207,7 @@ void ComputeChecksum::startImpl(std::unique_ptr<QIODevice> device)
 
     // We'd prefer to move the unique_ptr into the lambda, but that's
     // awkward with the C++ standard we're on
-    auto sharedDevice = QSharedPointer<QIODevice>(device.release());
+    const auto sharedDevice = QSharedPointer<QIODevice>(device.release());
 
     _checksumCalculator.reset(new ChecksumCalculator(sharedDevice, _checksumType));
     _watcher.setFuture(QtConcurrent::run([this]() {
@@ -275,28 +233,10 @@ QByteArray ComputeChecksum::computeNow(QIODevice *device, const QByteArray &chec
         return QByteArray();
     }
 
-    if (checksumType == checkSumMD5C) {
-        return calcMd5(device);
-    } else if (checksumType == checkSumSHA1C) {
-        return calcSha1(device);
-    } else if (checksumType == checkSumSHA2C) {
-        return calcCryptoHash(device, QCryptographicHash::Sha256);
-    }
-#if QT_VERSION >= QT_VERSION_CHECK(5, 9, 0)
-    else if (checksumType == checkSumSHA3C) {
-        return calcCryptoHash(device, QCryptographicHash::Sha3_256);
-    }
-#endif
-#ifdef ZLIB_FOUND
-    else if (checksumType == checkSumAdlerC) {
-        return calcAdler32(device);
-    }
-#endif
-    // for an unknown checksum or no checksum, we're done right now
-    if (!checksumType.isEmpty()) {
-        qCWarning(lcChecksums) << "Unknown checksum type:" << checksumType;
-    }
-    return QByteArray();
+    const auto sharedDevice = QSharedPointer<QIODevice>(device);
+    ChecksumCalculator checksumCalculator(sharedDevice, checksumType);
+
+    return checksumCalculator.calculate();
 }
 
 void ComputeChecksum::slotCalculationDone()
