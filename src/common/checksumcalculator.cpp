@@ -107,6 +107,13 @@ QByteArray ChecksumCalculator::calculate()
         }
     }
 
+    {
+        QMutexLocker locker(&_deviceMutex);
+        if (_device->isOpen()) {
+            _device->close();
+        }
+    }
+
     return result;
 }
 
