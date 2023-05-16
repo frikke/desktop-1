@@ -68,6 +68,7 @@ public:
     [[nodiscard]] bool listFilesInPath(const QByteArray &path, const std::function<void(const SyncJournalFileRecord&)> &rowCallback);
     [[nodiscard]] Result<void, QString> setFileRecord(const SyncJournalFileRecord &record);
     [[nodiscard]] bool getTopLevelE2eFolderRecord(const QString &remoteFolderPath, SyncJournalFileRecord *rec);
+    [[nodiscard]] bool listAllTopLevelE2eeFolders(const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
 
     void keyValueStoreSet(const QString &key, QVariant value);
     [[nodiscard]] qint64 keyValueStoreGetInt(const QString &key, qint64 defaultValue);
