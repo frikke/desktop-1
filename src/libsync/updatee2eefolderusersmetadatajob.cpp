@@ -172,7 +172,6 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
         }
         if (_operation == Operation::Add || _operation == Operation::Remove) {
             bool result = false;
-            _metadataKeyForDecryption = _folderMetadata->metadataKey();
             if (_operation == Operation::Add) {
                 result = _folderMetadata->addUser(_folderUserId, _folderUserCertificate);
             } else if (_operation == Operation::Remove) {
@@ -212,7 +211,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
                                                                                              QString::fromUtf8(record._path));
             _folderUserId, QSslCertificate{},
             reEncryptE2EeFolderMetatadaJob->setTopLevelFolderMetadata(_folderMetadata);
-            reEncryptE2EeFolderMetatadaJob->setMetadataKeyForDecryption(_metadataKeyForDecryption);
+            reEncryptE2EeFolderMetatadaJob->setMetadataKeyForDecryption(_folderMetadata->metadataKeyForDecryption());
             reEncryptE2EeFolderMetatadaJob->setParent(this);
             reEncryptE2EeFolderMetatadaJob->setFolderToken(_folderToken);
             const auto fileId = record._fileId;

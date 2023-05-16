@@ -77,11 +77,15 @@ public:
     bool addUser(const QString &userId, const QSslCertificate certificate);
     bool removeUser(const QString &userId);
 
-    const QByteArray &metadataKey() const;
+    [[nodiscard]] const QByteArray metadataKeyForEncryption() const;
     const QSet<QByteArray> &keyChecksums() const;
     int versionFromMetadata() const;
 
     QByteArray encryptedMetadata();
+
+    RequiredMetadataVersion metadataVersion() const;
+
+    [[nodiscard]] const QByteArray metadataKeyForDecryption() const;
 
 private:
     /* Use std::string and std::vector internally on this class
@@ -103,14 +107,9 @@ private:
     [[nodiscard]] QByteArray encryptCipherText(const QByteArray &cipherText, const QByteArray &pass, const QByteArray &initiaizationVector, QByteArray &returnTag) const;
     [[nodiscard]] QByteArray decryptCipherText(const QByteArray &encryptedCipherText, const QByteArray &pass, const QByteArray &initiaizationVector) const;
 
-    [[nodiscard]] EncryptedFile parseFileAndFolderFromJson(const QString &encryptedFilename, const QJsonValue &fileJSON) const;
+    [[nodiscard]] EncryptedFile parseEncryptedFileFromJson(const QString &encryptedFilename, const QJsonValue &fileJSON) const;
 
     [[nodiscard]] QJsonObject convertFileToJsonObject(const EncryptedFile *encryptedFile, const QByteArray &metadataKey) const;
-    
-    QByteArray handleEncryptionRequestV2();
-    QByteArray handleEncryptionRequestV1();
-
-    [[nodiscard]] QByteArray metadataKeyForDecryption() const;
 
     static QByteArray gZipEncryptAndBase64Encode(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv, QByteArray &returnTag);
     static QByteArray base64DecodeDecryptAndGzipUnZip(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv);
@@ -124,11 +123,10 @@ public slots:
 
 private slots:
     void setupMetadata();
-    void setupEmptyMetadataV2();
-    void setupEmptyMetadataV1();
+    void setupEmptyMetadata();
     void setupExistingMetadata(const QByteArray &metadata);
-    void setupExistingMetadataVersion1And2(const QByteArray &metadata);
-    void setupExistingMetadataVersion2(const QByteArray &metadata);
+    void setupExistingLegacyMetadataForMigration(const QByteArray &metadata);
+    void setupExistingMetadataLatestVersion(const QByteArray &metadata);
     void startFetchTopLevelFolderMetadata();
     void fetchTopLevelFolderMetadata(const QByteArray &folderId);
     void topLevelFolderEncryptedIdReceived(const QStringList &list);
@@ -144,8 +142,8 @@ signals:
 
 private:
     QVector<EncryptedFile> _files;
-    QByteArray _metadataKey;
-    QByteArray _metadataKeyForDecryption;
+    QByteArray _metadataKeyForEncryption;
+    QByteArray _metadataKeyForDecryption; // used for storing initial metadataKey to use for decryption, especially in nested folders when changing the metadataKey and re-encrypting nested dirs
     QByteArray _metadataNonce;
     QByteArray _fileDropMetadataNonce;
     QByteArray _fileDropMetadataAuthenticationTag;
@@ -165,7 +163,7 @@ private:
     // used by unit tests, must get assigned simultaneously with _fileDrop and not erased
     QJsonObject _fileDropFromServer;
     bool _isMetadataSetup = false;
-    bool _encryptedMetadataNeedUpdate = false;
+    bool _migrationNeeded = false;
 };
 
 } // namespace OCC
