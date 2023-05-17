@@ -134,7 +134,7 @@ private slots:
     void topLevelFolderEncryptedMetadataReceived(const QJsonDocument &json, int statusCode);
     void topLevelFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode);
     void updateUsersEncryptedMetadataKey();
-    void createNewMetadataKey();
+    void createNewMetadataKeyForEncryption();
     void emitSetupComplete();
 
 signals:

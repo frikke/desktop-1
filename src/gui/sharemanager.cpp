@@ -510,7 +510,6 @@ void ShareManager::createE2EeShareJob(const QString &path,
 
     const auto createE2eeShareJob = new UpdateE2eeFolderUsersMetadataJob(_account,
                                                                          folder->journalDb(),
-                                                                         folderId,
                                                                          folder->remotePath(),
                                                                          UpdateE2eeFolderUsersMetadataJob::Add,
                                                                          path,

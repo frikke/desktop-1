@@ -25,7 +25,6 @@ Q_LOGGING_CATEGORY(lcUpdateE2eeFolderUsersMetadataJob, "nextcloud.gui.updatee2ee
 
 UpdateE2eeFolderUsersMetadataJob::UpdateE2eeFolderUsersMetadataJob(const AccountPtr &account,
                                                        SyncJournalDb *journalDb,
-                                                       const QByteArray &folderId,
                                                        const QString &syncFolderRemotePath,
                                                        const Operation operation,
                                                        const QString &path,
@@ -35,7 +34,6 @@ UpdateE2eeFolderUsersMetadataJob::UpdateE2eeFolderUsersMetadataJob(const Account
     : QObject{parent}
     , _account(account)
     , _journalDb(journalDb)
-    , _folderId(folderId)
     , _syncFolderRemotePath(syncFolderRemotePath)
     , _operation(operation)
     , _path(path)
@@ -65,13 +63,32 @@ void UpdateE2eeFolderUsersMetadataJob::start()
         return;
     }
 
+    qDebug() << "Folder is encrypted, let's get the Id from it.";
+    const auto pathSanitized = _path.startsWith(QLatin1Char('/')) ? _path.mid(1) : _path;
+    const auto fetchFolderEncryptedIdJob = new LsColJob(_account, _syncFolderRemotePath + pathSanitized, this);
+    fetchFolderEncryptedIdJob->setProperties({"resourcetype", "http://owncloud.org/ns:fileid"});
+    connect(fetchFolderEncryptedIdJob, &LsColJob::directoryListingSubfolders, this, &UpdateE2eeFolderUsersMetadataJob::slotFolderEncryptedIdReceived);
+    connect(fetchFolderEncryptedIdJob, &LsColJob::finishedWithError, this, &UpdateE2eeFolderUsersMetadataJob::slotFolderEncryptedIdError);
+    fetchFolderEncryptedIdJob->start();
+}
+
+void UpdateE2eeFolderUsersMetadataJob::startUpdate()
+{
+    if (!_journalDb) {
+        emit finished(404, tr("Could not find local folder for %1").arg(QString::fromUtf8(_folderId)));
+        return;
+    }
+
     switch (_operation) {
     case Operation::Add:
         if (!_folderUserCertificate.isNull()) {
             emit certificateReady();
             return;
         }
-        connect(_account->e2e(), &ClientSideEncryption::certificateFetchedFromKeychain, this, &UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain);
+        connect(_account->e2e(),
+                &ClientSideEncryption::certificateFetchedFromKeychain,
+                this,
+                &UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain);
         _account->e2e()->fetchFromKeyChain(_account, _folderUserId);
         return;
     case Operation::Remove:
@@ -82,7 +99,8 @@ void UpdateE2eeFolderUsersMetadataJob::start()
         return;
     }
 
-    emit finished(404, tr("Invalid folder user update metadata operation for a folder user %1, for folder %2").arg(_folderUserId).arg(QString::fromUtf8(_folderId)));
+    emit finished(404,
+                  tr("Invalid folder user update metadata operation for a folder user %1, for folder %2").arg(_folderUserId).arg(QString::fromUtf8(_folderId)));
 }
 
 void UpdateE2eeFolderUsersMetadataJob::setUserData(const QVariant &userData)
@@ -146,6 +164,34 @@ void UpdateE2eeFolderUsersMetadataJob::slotFetchFolderMetadata()
     job->start();
 }
 
+void UpdateE2eeFolderUsersMetadataJob::slotFolderEncryptedIdReceived(const QStringList &list)
+{
+    qDebug() << "Received id of folder, trying to lock it so we can prepare the metadata";
+    const auto fetchFolderEncryptedIdJob = qobject_cast<LsColJob *>(sender());
+    Q_ASSERT(fetchFolderEncryptedIdJob);
+    if (!fetchFolderEncryptedIdJob) {
+        qCritical() << "slotFolderEncryptedIdReceived must be called by a signal";
+        emit finished(SyncFileItem::Status::FatalError);
+        return;
+    }
+    Q_ASSERT(!list.isEmpty());
+    if (list.isEmpty()) {
+        qCritical() << "slotFolderEncryptedIdReceived list.isEmpty()";
+        emit finished(SyncFileItem::Status::FatalError);
+        return;
+    }
+    const auto &folderInfo = fetchFolderEncryptedIdJob->_folderInfos.value(list.first());
+    _folderId = folderInfo.fileId;
+    startUpdate();
+}
+
+void UpdateE2eeFolderUsersMetadataJob::slotFolderEncryptedIdError(QNetworkReply *r)
+{
+    Q_UNUSED(r);
+    qCritical() << "Error retrieving the Id of the encrypted folder.";
+    emit finished(SyncFileItem::Status::FatalError);
+}
+
 void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument &json, int statusCode)
 {
     qCDebug(lcUpdateE2eeFolderUsersMetadataJob) << "Metadata received, applying it to the result list";
@@ -205,10 +251,9 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
 
             const auto reEncryptE2EeFolderMetatadaJob = new UpdateE2eeFolderUsersMetadataJob(_account,
                                                                                              _journalDb,
-                                                                                             record._fileId,
                                                                                              _syncFolderRemotePath,
                                                                                              UpdateE2eeFolderUsersMetadataJob::ReEncrypt,
-                                                                                             QString::fromUtf8(record._path));
+                                                                                             QString::fromUtf8(record._e2eMangledName));
             _folderUserId, QSslCertificate{},
             reEncryptE2EeFolderMetatadaJob->setTopLevelFolderMetadata(_folderMetadata);
             reEncryptE2EeFolderMetatadaJob->setMetadataKeyForDecryption(_folderMetadata->metadataKeyForDecryption());
@@ -305,7 +350,10 @@ void UpdateE2eeFolderUsersMetadataJob::slotFolderUnlocked(const QByteArray &fold
 void UpdateE2eeFolderUsersMetadataJob::slotUpdateFolderMetadata()
 {
     const auto encryptedMetadata = _folderMetadata->encryptedMetadata();
-    if (encryptedMetadata.isEmpty()) { }
+    if (encryptedMetadata.isEmpty()) {
+        emit finished(-1, tr("Could not setup metadata for a folder %1").arg(QString::fromUtf8(_folderId)));
+        return;
+    }
     const auto job = new UpdateMetadataApiJob(_account, _folderId, encryptedMetadata, _folderToken);
     connect(job, &UpdateMetadataApiJob::success, this, &UpdateE2eeFolderUsersMetadataJob::slotUpdateMetadataSuccess);
     connect(job, &UpdateMetadataApiJob::error, this, &UpdateE2eeFolderUsersMetadataJob::slotUpdateMetadataError);

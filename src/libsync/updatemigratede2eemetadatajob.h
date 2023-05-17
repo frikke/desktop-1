@@ -33,11 +33,10 @@ public:
 
     [[nodiscard]] JobParallelism parallelism() const override;
 
+    [[nodiscard]] QString path() const;
+
 private slots:
     void start();
-    void startUpdateFolderUsersMetadataJob(const QByteArray &folderId);
-    void slotFolderEncryptedIdReceived(const QStringList &list);
-    void slotFolderEncryptedIdError(QNetworkReply *reply);
 
 private:
     QString _path;

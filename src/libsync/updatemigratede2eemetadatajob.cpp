@@ -45,20 +45,8 @@ UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator 
 
 void UpdateMigratedE2eeMetadataJob::start()
 {
-    qDebug() << "Folder is encrypted, let's get the Id from it.";
-    const auto pathSanitized = _path.startsWith(QLatin1Char('/')) ? _path.mid(1) : _path;
-    const auto fetchFolderEncryptedIdJob = new LsColJob(propagator()->account(), _folderRemotePath + pathSanitized, this);
-    fetchFolderEncryptedIdJob->setProperties({"resourcetype", "http://owncloud.org/ns:fileid"});
-    connect(fetchFolderEncryptedIdJob, &LsColJob::directoryListingSubfolders, this, &UpdateMigratedE2eeMetadataJob::slotFolderEncryptedIdReceived);
-    connect(fetchFolderEncryptedIdJob, &LsColJob::finishedWithError, this, &UpdateMigratedE2eeMetadataJob::slotFolderEncryptedIdError);
-    fetchFolderEncryptedIdJob->start();
-}
-
-void UpdateMigratedE2eeMetadataJob::startUpdateFolderUsersMetadataJob(const QByteArray &folderId)
-{
     const auto updateMedatadaAndSubfoldersJob = new UpdateE2eeFolderUsersMetadataJob(propagator()->account(),
                                                                                      propagator()->_journal,
-                                                                                     folderId,
                                                                                      _folderRemotePath,
                                                                                      UpdateE2eeFolderUsersMetadataJob::Add,
                                                                                      _path,
@@ -69,33 +57,6 @@ void UpdateMigratedE2eeMetadataJob::startUpdateFolderUsersMetadataJob(const QByt
     connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this]() {
         emit finished(SyncFileItem::Status::Success);
     });
-}
-
-void UpdateMigratedE2eeMetadataJob::slotFolderEncryptedIdReceived(const QStringList &list)
-{
-    qDebug() << "Received id of folder, trying to lock it so we can prepare the metadata";
-    const auto fetchFolderEncryptedIdJob = qobject_cast<LsColJob *>(sender());
-    Q_ASSERT(fetchFolderEncryptedIdJob);
-    if (!fetchFolderEncryptedIdJob) {
-        qCritical() << "slotFolderEncryptedIdReceived must be called by a signal";
-        emit finished(SyncFileItem::Status::FatalError);
-        return;
-    }
-    Q_ASSERT(!list.isEmpty());
-    if (list.isEmpty()) {
-        qCritical() << "slotFolderEncryptedIdReceived list.isEmpty()";
-        emit finished(SyncFileItem::Status::FatalError);
-        return;
-    }
-    const auto &folderInfo = fetchFolderEncryptedIdJob->_folderInfos.value(list.first());
-    startUpdateFolderUsersMetadataJob(folderInfo.fileId);
-}
-
-void UpdateMigratedE2eeMetadataJob::slotFolderEncryptedIdError(QNetworkReply *r)
-{
-    Q_UNUSED(r);
-    qCritical() << "Error retrieving the Id of the encrypted folder.";
-    emit finished(SyncFileItem::Status::FatalError);
 }
 
 bool UpdateMigratedE2eeMetadataJob::scheduleSelfOrChild()
@@ -115,5 +76,10 @@ bool UpdateMigratedE2eeMetadataJob::scheduleSelfOrChild()
 PropagatorJob::JobParallelism UpdateMigratedE2eeMetadataJob::parallelism() const
 {
     return PropagatorJob::JobParallelism::WaitForFinished;
+}
+
+QString UpdateMigratedE2eeMetadataJob::path() const
+{
+    return _path;
 }
 }

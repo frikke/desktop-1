@@ -95,8 +95,7 @@ void PropagateDownloadEncrypted::checkFolderEncryptedMetadata(const QJsonDocumen
   }();
 
   const auto topLevelFolderPath = rec.path() == _parentPathInDb ? QStringLiteral("/") : rec.path();
-  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(),
-      requiredMetadataVersion, json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(), FolderMetadata::RequiredMetadataVersion::Version2_0, json.toJson(QJsonDocument::Compact), topLevelFolderPath));
 
   connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, metadata, filename] {
       if (metadata->isMetadataSetup()) {

@@ -34,7 +34,6 @@ public:
     enum Operation { Invalid = -1, Add = 0, Remove, ReEncrypt };
     explicit UpdateE2eeFolderUsersMetadataJob(const AccountPtr &account,
                                         SyncJournalDb *journalDb,
-                                        const QByteArray &folderId,
                                         const QString &syncFolderRemotePath,
                                         const Operation operation,
                                         const QString &path = {},
@@ -48,6 +47,7 @@ public:
 
 public slots:
     void start();
+    void startUpdate();
     void setUserData(const QVariant &userData);
     void setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata);
     void setFolderToken(const QByteArray &folderToken);
@@ -58,6 +58,8 @@ private slots:
     void slotCertificateFetchedFromKeychain(const QSslCertificate certificate);
     void slotCertificateReady();
     void slotFetchFolderMetadata();
+    void slotFolderEncryptedIdReceived(const QStringList &list);
+    void slotFolderEncryptedIdError(QNetworkReply *reply);
     void slotMetadataReceived(const QJsonDocument &json, int statusCode);
     void slotMetadataError(const QByteArray &folderId, int httpReturnCode);
     void slotScheduleSubJobs();

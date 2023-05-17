@@ -491,6 +491,8 @@ void OwncloudPropagator::start(SyncFileItemVector &&items)
 {
     Q_ASSERT(std::is_sorted(items.begin(), items.end()));
 
+    _appendedMigrationJobs.clear();
+
     _abortRequested = false;
 
     /* This builds all the jobs needed for the propagation.
@@ -666,7 +668,20 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
             item->_status = SyncFileItem::NormalError;
             emit itemCompleted(item, OCC::ErrorCategory::GenericError);
         } else {
-            directoryPropagationJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, fullRemotePath(item->_file), remotePath()));
+            const auto itemPath = item->_encryptedFileName.isEmpty() ? item->_file : item->_file.split('/').first();
+            const auto itemFullRemotePath = fullRemotePath(itemPath);
+            auto isJobAlreadyAppended = false;
+
+            for (const auto &alreadyAppendedFullRemotePath : _appendedMigrationJobs) {
+                if (alreadyAppendedFullRemotePath == itemFullRemotePath) {
+                    isJobAlreadyAppended = true;
+                    break;
+                }
+            }
+            if (!isJobAlreadyAppended) {
+                _appendedMigrationJobs.insert(itemFullRemotePath);
+                directoryPropagationJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, itemFullRemotePath, remotePath()));
+            }
             item->_instruction = CSYNC_INSTRUCTION_NONE;
             _anotherSyncNeeded = true;
         }

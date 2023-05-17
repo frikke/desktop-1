@@ -59,7 +59,6 @@ FolderMetadata::FolderMetadata(AccountPtr account,
     , _requiredMetadataVersion(requiredMetadataVersion)
     , _initialMetadata(metadata)
     , _topLevelFolderPath(topLevelFolderPath)
-    , _metadataKeyForDecryption(metadataKeyForDecryption)
     , _topLevelFolderMetadata(topLevelFolderMetadata)
 {
 
@@ -86,6 +85,10 @@ FolderMetadata::FolderMetadata(AccountPtr account,
     }
     if (metaDataDoc.object().contains(versionKey)) {
         _versionFromMetadata = metaDataDoc.object()[versionKey].toInt();
+    }
+
+    if (static_cast<int>(metadataVersion()) >= static_cast<int>(RequiredMetadataVersion::Version2_0) && !isTopLevelFolder()) {
+        _metadataKeyForDecryption = _topLevelFolderMetadata->metadataKeyForDecryption();
     }
 
     if (!isTopLevelFolder() && !_topLevelFolderMetadata) {
@@ -121,15 +124,8 @@ void FolderMetadata::setupMetadata()
         setupExistingMetadata(_initialMetadata);
     }
 
-    if (metadataKeyForEncryption().isEmpty()) {
-        if (_topLevelFolderMetadata) {
-            _metadataKeyForEncryption = _topLevelFolderMetadata->metadataKeyForEncryption();
-        }
-    }
-    if (metadataKeyForDecryption().isEmpty()) {
-        if (_topLevelFolderMetadata) {
-            _metadataKeyForDecryption = _topLevelFolderMetadata->metadataKeyForDecryption();
-        }
+    if (_topLevelFolderMetadata) {
+        _metadataKeyForEncryption = _topLevelFolderMetadata->metadataKeyForEncryption();
     }
 
     if (metadataKeyForDecryption().isEmpty()) {
@@ -209,8 +205,8 @@ void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &m
         return;
     }
 
-    if (metadataKeyForEncryption().isEmpty()) {
-        _metadataKeyForEncryption = _metadataKeyForDecryption;
+    if (metadataKeyForEncryption().isEmpty() && _topLevelFolderMetadata) {
+        _metadataKeyForEncryption = _topLevelFolderMetadata->metadataKeyForEncryption();
     }
 
     const auto sharing = metadataObj["sharing"].toString().toLocal8Bit();
@@ -593,16 +589,17 @@ void FolderMetadata::setupEmptyMetadata()
     qCDebug(lcCseMetadata()) << "Setting up empty metadata v2";
     if (_topLevelFolderMetadata) {
         _metadataKeyForEncryption = _topLevelFolderMetadata->metadataKeyForEncryption();
+        _metadataKeyForDecryption = _topLevelFolderMetadata->metadataKeyForDecryption();
         _keyChecksums = _topLevelFolderMetadata->keyChecksums();
     } else {
-        createNewMetadataKey();
+        createNewMetadataKeyForEncryption();
     }
     
     if (!_topLevelFolderMetadata && _topLevelFolderPath.isEmpty() || isTopLevelFolder()) {
         FolderUser folderUser;
         folderUser.userId = _account->davUser();
         folderUser.certificatePem = _account->e2e()->_certificate.toPem();
-        folderUser.encryptedMetadataKey = encryptData(_metadataKeyForEncryption);
+        folderUser.encryptedMetadataKey = encryptData(metadataKeyForEncryption());
 
         _folderUsers[_account->davUser()] = folderUser;
     }
@@ -616,8 +613,8 @@ void FolderMetadata::setupEmptyMetadata()
 QByteArray FolderMetadata::encryptedMetadata()
 {
     qCDebug(lcCseMetadata()) << "Generating metadata";
-    if (static_cast<int>(metadataVersion()) < static_cast<int>(RequiredMetadataVersion::Version2_0)) {
-        createNewMetadataKey();
+    if (isTopLevelFolder() && _folderUsers.isEmpty() && static_cast<int>(metadataVersion()) < static_cast<int>(RequiredMetadataVersion::Version2_0)) {
+        createNewMetadataKeyForEncryption();
     }
 
     if (_metadataKeyForEncryption.isEmpty()) {
@@ -844,10 +841,12 @@ void FolderMetadata::topLevelFolderEncryptedMetadataReceived(const QJsonDocument
         _topLevelFolderMetadata.reset(new FolderMetadata(_account, json.toJson(QJsonDocument::Compact),
                                                          QStringLiteral("/")));
         connect(_topLevelFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this]() {
-            if (_topLevelFolderMetadata->versionFromMetadata() == -1 || _topLevelFolderMetadata->versionFromMetadata() > 1) {
+            if (_topLevelFolderMetadata->versionFromMetadata() >= 2.0f) {
                 _metadataKeyForEncryption = _topLevelFolderMetadata->metadataKeyForEncryption();
-                _metadataKeyForDecryption = _topLevelFolderMetadata->metadataKeyForDecryption();
-                _keyChecksums = _topLevelFolderMetadata->keyChecksums();
+                if (versionFromMetadata() >= 2.0f) {
+                    _metadataKeyForDecryption = _topLevelFolderMetadata->metadataKeyForDecryption();
+                    _keyChecksums = _topLevelFolderMetadata->keyChecksums();
+                }
             }
             setupMetadata();
         });
@@ -875,7 +874,7 @@ bool FolderMetadata::addUser(const QString &userId, const QSslCertificate certif
         return false;
     }
 
-    createNewMetadataKey();
+    createNewMetadataKeyForEncryption();
     FolderUser newFolderUser;
     newFolderUser.userId = userId;
     newFolderUser.certificatePem = certificate.toPem();
@@ -899,7 +898,7 @@ bool FolderMetadata::removeUser(const QString &userId)
         return false;
     }
 
-    createNewMetadataKey();
+    createNewMetadataKeyForEncryption();
     _folderUsers.remove(userId);
     updateUsersEncryptedMetadataKey();
 
@@ -955,19 +954,17 @@ void FolderMetadata::updateUsersEncryptedMetadataKey()
     }
 }
 
-void FolderMetadata::createNewMetadataKey()
+void FolderMetadata::createNewMetadataKeyForEncryption()
 {
     if (!isTopLevelFolder()) {
         return;
     }
-    if (!_metadataKeyForEncryption.isEmpty() && _metadataKeyForEncryption.size() >= metadataKeySize ) {
-        const QByteArray metadataKeyOldLimitedLength(_metadataKeyForEncryption.data(), metadataKeySize );
-        _keyChecksums.remove(calcSha256(metadataKeyOldLimitedLength));
+    if (!_metadataKeyForEncryption.isEmpty()) {
+        _keyChecksums.remove(calcSha256(_metadataKeyForEncryption));
     }
     _metadataKeyForEncryption = EncryptionHelper::generateRandom(metadataKeySize);
-    if (!_metadataKeyForEncryption.isEmpty() && _metadataKeyForEncryption.size() >= metadataKeySize ) {
-        const QByteArray metadataKeyLimitedLength(_metadataKeyForEncryption.data(), metadataKeySize );
-        _keyChecksums.insert(calcSha256(metadataKeyLimitedLength));
+    if (!_metadataKeyForEncryption.isEmpty()) {
+        _keyChecksums.insert(calcSha256(_metadataKeyForEncryption));
     }
 }
 

@@ -852,7 +852,6 @@ void ShareModel::slotDeleteE2EeShare(const SharePtr &share) const
 
     const auto removeE2eeShareJob = new UpdateE2eeFolderUsersMetadataJob(account,
                                                                          folder->journalDb(),
-                                                                         _folderId,
                                                                          folder->remotePath(),
                                                                          UpdateE2eeFolderUsersMetadataJob::Remove,
                                                                          share->path(),
