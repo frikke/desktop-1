@@ -308,6 +308,10 @@ void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &m
         return;
     }
 
+    if (metadataKeyForEncryption().isEmpty()) {
+        _metadataKeyForEncryption = metadataKeyForDecryption();
+    }
+
     const auto sharing = metadataObj["sharing"].toString().toLocal8Bit();
     const auto files = metaDataDoc.object()["files"].toObject();
     const auto metadataKey = metaDataDoc.object()["metadata"].toObject()["metadataKey"].toString().toUtf8();
@@ -352,7 +356,7 @@ void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &m
         _files.push_back(file);
     }
 
-    if (!checkMetadataKeyChecksum(metadataKey, metadataKeyChecksum)) {
+    if (!checkMetadataKeyChecksum(metadataKey, metadataKeyChecksum) && static_cast<int>(metadataVersion() >= RequiredMetadataVersion::Version1_2)) {
         qCInfo(lcCseMetadata) << "checksum comparison failed"
                               << "server value" << metadataKeyChecksum << "client value" << computeMetadataKeyChecksum(metadataKey);
         if (!_account->shouldSkipE2eeMetadataChecksumValidation()) {
@@ -832,25 +836,28 @@ void FolderMetadata::topLevelFolderEncryptedMetadataError(const QByteArray &file
 
 void FolderMetadata::topLevelFolderEncryptedMetadataReceived(const QJsonDocument &json, int statusCode)
 {
-    if (!json.isEmpty()) {
+    if (json.isEmpty()) {
         setupMetadata();
         return;
     }
 
     QSharedPointer<FolderMetadata> topLevelFolderMetadata(new FolderMetadata(_account, json.toJson(QJsonDocument::Compact), TopLevelFolderInitializationData::makeDefault()));
-    connect(topLevelFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this, &topLevelFolderMetadata]() {
+    connect(topLevelFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this, topLevelFolderMetadata]() {
         if (!topLevelFolderMetadata->isMetadataSetup() || !topLevelFolderMetadata->isVersion2AndUp()) {
+            setupMetadata();
             return;
         }
 
         _metadataKeyForEncryption = topLevelFolderMetadata->metadataKeyForEncryption();
 
         if (!isVersion2AndUp()) {
+            setupMetadata();
             return;
         }
         _metadataKeyForDecryption = topLevelFolderMetadata->metadataKeyForDecryption();
         _metadataKeyForEncryption = topLevelFolderMetadata->metadataKeyForEncryption();
         _keyChecksums = topLevelFolderMetadata->keyChecksums();
+        setupMetadata();
     });
 }
 
