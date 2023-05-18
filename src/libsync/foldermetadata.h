@@ -43,7 +43,7 @@ public:
         Version2_0,
     };
 
-    FolderMetadata::FolderMetadata(AccountPtr account);
+    FolderMetadata(AccountPtr account);
 
     FolderMetadata(AccountPtr account,
                    RequiredMetadataVersion requiredMetadataVersion,
