@@ -755,6 +755,11 @@ QMap<QByteArray, QByteArray> PropagateUploadFileCommon::headers()
         // We add quotes because the owncloud server always adds quotes around the etag, and
         //  csync_owncloud.c's owncloud_file_id always strips the quotes.
         headers[QByteArrayLiteral("If-Match")] = '"' + _item->_etag + '"';
+        qCInfo(lcPropagateUpload()) << "[DEBUG_CONFLICTS] PropagateUploadFileCommon::headers headers[QByteArrayLiteral(If - Match)]:"
+                                    << headers[QByteArrayLiteral("If-Match")];
+    } else {
+        qCInfo(lcPropagateUpload()) << "[DEBUG_CONFLICTS] PropagateUploadFileCommon::headers headers[QByteArrayLiteral(If - Match)]:"
+                                    << headers[QByteArrayLiteral("If-Match")];
     }
 
     // Set up a conflict file header pointing to the original file

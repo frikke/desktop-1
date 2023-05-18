@@ -578,6 +578,9 @@ QMap<QByteArray, QByteArray> BulkPropagatorJob::headers(SyncFileItemPtr item) co
         // We add quotes because the owncloud server always adds quotes around the etag, and
         //  csync_owncloud.c's owncloud_file_id always strips the quotes.
         headers[QByteArrayLiteral("If-Match")] = '"' + item->_etag + '"';
+        qCInfo(lcBulkPropagatorJob) << "[DEBUG_CONFLICTS] BulkPropagatorJob::headers headers[QByteArrayLiteral(If - Match)]:" << headers[QByteArrayLiteral("If-Match")];
+    } else {
+        qCInfo(lcBulkPropagatorJob) << "[DEBUG_CONFLICTS] BulkPropagatorJob::headers item->_etag: " << item->_etag;
     }
 
     // Set up a conflict file header pointing to the original file

@@ -312,6 +312,11 @@ void PropagateUploadFileNG::startNextChunk()
         auto ifMatch = headers.take(QByteArrayLiteral("If-Match"));
         if (!ifMatch.isEmpty()) {
             headers[QByteArrayLiteral("If")] = "<" + QUrl::toPercentEncoding(destination, "/") + "> ([" + ifMatch + "])";
+            qCInfo(lcPropagateUpload()) << "[DEBUG_CONFLICTS] PropagateUploadFileNG::startNextChunk headers[QByteArrayLiteral(If)]:"
+                                        << headers[QByteArrayLiteral("If")];
+
+        } else {
+            qCInfo(lcPropagateUpload()) << "[DEBUG_CONFLICTS] PropagateUploadFileNG ifMatch.isEmpty()";
         }
         if (!_transmissionChecksumHeader.isEmpty()) {
             qCInfo(lcPropagateUpload) << destination << _transmissionChecksumHeader;

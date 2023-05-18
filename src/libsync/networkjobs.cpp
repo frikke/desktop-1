@@ -210,6 +210,7 @@ LsColXMLParser::LsColXMLParser() = default;
 
 bool LsColXMLParser::parse(const QByteArray &xml, QHash<QString, ExtraFolderInfo> *fileInfo, const QString &expectedPath)
 {
+    qCInfo(lcLsColJob) << "[DEBUG_CONFLICTS] expectedPath: " << expectedPath << "xml:" << xml;
     // Parse DAV response
     QXmlStreamReader reader(xml);
     reader.addExtraNamespaceDeclaration(QXmlStreamNamespaceDeclaration("d", "DAV:"));
@@ -368,9 +369,14 @@ void LsColJob::start()
     auto *buf = new QBuffer(this);
     buf->setData(xml);
     buf->open(QIODevice::ReadOnly);
+    
     if (_url.isValid()) {
+        qCInfo(lcLsColJob) << "[DEBUG_CONFLICTS] LsColJob::start() with VERB PROPFIND:"
+                           << "for URL:" << _url << "with body:" << xml;
         sendRequest("PROPFIND", _url, req, buf);
     } else {
+        qCInfo(lcLsColJob) << "[DEBUG_CONFLICTS] LsColJob::start() with VERB PROPFIND:"
+                           << "for URL:" << makeDavUrl(path()) << "with body:" << xml;
         sendRequest("PROPFIND", makeDavUrl(path()), req, buf);
     }
     AbstractNetworkJob::start();
@@ -401,7 +407,7 @@ bool LsColJob::finished()
             this, &LsColJob::finishedWithError);
         connect(&parser, &LsColXMLParser::finishedWithoutError,
             this, &LsColJob::finishedWithoutError);
-
+        qCInfo(lcLsColJob) << "[DEBUG_CONFLICTS] LsColJob::finished() with VERB PROPFIND:" << "for URL:" << reply()->request().url();
         QString expectedPath = reply()->request().url().path(); // something like "/owncloud/remote.php/dav/folder"
         if (!parser.parse(reply()->readAll(), &_folderInfos, expectedPath)) {
             // XML parse error
