@@ -669,20 +669,20 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
         }
     }();
 
-    _e2EeFolderMetadata.reset(new FolderMetadata(_account, requiredMetadataVersion, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    _e2EeFolderMetadata.reset(new FolderMetadata(_account, requiredMetadataVersion, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         _isFileDropDetected = _e2EeFolderMetadata->isFileDropPresent();
         _encryptedMetadataNeedUpdate = _e2EeFolderMetadata->encryptedMetadataNeedUpdate();
         const auto encryptedFiles = _e2EeFolderMetadata->files();
 
         const auto findEncryptedFile = [=](const QString &name) {
-            const auto it = std::find_if(std::cbegin(encryptedFiles), std::cend(encryptedFiles), [=](const EncryptedFile &file) {
+            const auto it = std::find_if(std::cbegin(encryptedFiles), std::cend(encryptedFiles), [=](const FolderMetadata::EncryptedFile &file) {
                 return file.encryptedFilename == name;
             });
             if (it == std::cend(encryptedFiles)) {
-                return Optional<EncryptedFile>();
+                return Optional<FolderMetadata::EncryptedFile>();
             } else {
-                return Optional<EncryptedFile>(*it);
+                return Optional<FolderMetadata::EncryptedFile>(*it);
             }
         };
 

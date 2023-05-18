@@ -59,7 +59,7 @@ void PropagateRemoteDeleteEncrypted::slotFolderEncryptedMetadataReceived(const Q
     }
 
     const auto topLevelFolderPath = rec.path() == fullFolderRemotePathSanitized ? QStringLiteral("/") : rec.path();
-    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
     connect(metadata, &FolderMetadata::setupComplete, this, [this, metadata] {
         if (!metadata->isMetadataSetup()) {
             taskFailed();
@@ -74,8 +74,8 @@ void PropagateRemoteDeleteEncrypted::slotFolderEncryptedMetadataReceived(const Q
 
         // Find existing metadata for this file
         bool found = false;
-        const QVector<EncryptedFile> files = metadata->files();
-        for (const EncryptedFile &file : files) {
+        const QVector<FolderMetadata::EncryptedFile> files = metadata->files();
+        for (const FolderMetadata::EncryptedFile &file : files) {
             if (file.originalFilename == fileName) {
                 metadata->removeEncryptedFile(file);
                 found = true;

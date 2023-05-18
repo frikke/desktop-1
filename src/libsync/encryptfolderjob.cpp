@@ -100,7 +100,7 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
         return;
     }
     const auto topLevelFolderPath = rec.path() == currentPath ? QStringLiteral("/") : rec.path();
-    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, topLevelFolderPath));
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, metadata] {
         const auto encryptedMetadata = metadata->encryptedMetadata();
         if (encryptedMetadata.isEmpty()) {

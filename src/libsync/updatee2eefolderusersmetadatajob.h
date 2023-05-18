@@ -1,5 +1,5 @@
 /*
- * Copyright (C) by Oleksandr Zolotov <alex@nextcloud.com>
+ * Copyright (C) 2023 by Oleksandr Zolotov <alex@nextcloud.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -49,9 +49,10 @@ public slots:
     void start();
     void startUpdate();
     void setUserData(const QVariant &userData);
-    void setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata);
     void setFolderToken(const QByteArray &folderToken);
+    void setMetadataKeyForEncryption(const QByteArray &metadataKey);
     void setMetadataKeyForDecryption(const QByteArray &metadataKey);
+    void setKeyChecksums(const QSet<QByteArray> &keyChecksums);
 
 private slots:
     void slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results);
@@ -88,10 +89,11 @@ private:
     QString _folderUserId;
     QSslCertificate _folderUserCertificate;
     QByteArray _folderToken;
+    QByteArray _metadataKeyForEncryption;
     QByteArray _metadataKeyForDecryption;
+    QSet<QByteArray> _keyChecksums;
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
-    QSharedPointer<FolderMetadata> _topLevelFolderMetadata;
     QVariant _userData;
 };
 

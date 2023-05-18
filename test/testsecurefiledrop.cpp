@@ -95,9 +95,12 @@ private slots:
                         const auto jsonDoc = QJsonDocument::fromJson(fakeJsonReplyFile.readAll());
                         const auto pathSplit = path.split(QLatin1Char('/'));
                         const QString folderRemotePath = pathSplit.last() + QStringLiteral("/");
-                        _parsedMetadataWithFileDrop.reset(new FolderMetadata(_fakeFolder.syncEngine().account(), jsonDoc.toJson(), folderRemotePath));
-                        _parsedMetadataAfterProcessingFileDrop.reset(
-                            new FolderMetadata(_fakeFolder.syncEngine().account(), jsonDoc.toJson(), folderRemotePath));
+                        _parsedMetadataWithFileDrop.reset(new FolderMetadata(_fakeFolder.syncEngine().account(),
+                                                                             jsonDoc.toJson(),
+                                                                             FolderMetadata::TopLevelFolderInitializationData(folderRemotePath)));
+                        _parsedMetadataAfterProcessingFileDrop.reset(new FolderMetadata(_fakeFolder.syncEngine().account(),
+                                                                                        jsonDoc.toJson(),
+                                                                                        FolderMetadata::TopLevelFolderInitializationData(folderRemotePath)));
                         [[maybe_unused]] const auto result = _parsedMetadataAfterProcessingFileDrop->moveFromFileDropToFiles();
                         reply = new FakePayloadReply(op, req, jsonDoc.toJson(), nullptr);
                         ++_getMetadataCallsCount;

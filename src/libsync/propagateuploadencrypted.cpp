@@ -131,8 +131,9 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
 
     const auto topLevelFolderPath = rec.path() == _remoteParentAbsolutePath ? QStringLiteral("/") : rec.path();
 
-    QSharedPointer<FolderMetadata> metadata(
-        new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(),
+                                                               statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact),
+                                                               FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, statusCode, metadata] {
         if (!metadata->isMetadataSetup()) {
             if (_isFolderLocked) {
@@ -149,10 +150,10 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
 
         // Find existing metadata for this file
         bool found = false;
-        EncryptedFile encryptedFile;
-        const QVector<EncryptedFile> files = metadata->files();
+        FolderMetadata::EncryptedFile encryptedFile;
+        const QVector<FolderMetadata::EncryptedFile> files = metadata->files();
 
-        for (const EncryptedFile &file : files) {
+        for (const FolderMetadata::EncryptedFile &file : files) {
             if (file.originalFilename == fileName) {
                 encryptedFile = file;
                 found = true;

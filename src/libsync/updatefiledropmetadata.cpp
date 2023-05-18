@@ -128,7 +128,7 @@ void UpdateFileDropMetadataJob::slotFolderEncryptedMetadataReceived(const QJsonD
     }
 
     const auto topLevelFolderPath = rec.path() == _path ? QStringLiteral("/") : rec.path();
-    _metadata.reset(new FolderMetadata(propagator()->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath));
+    _metadata.reset(new FolderMetadata(propagator()->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
     connect(_metadata.data(), &FolderMetadata::setupComplete, this, [this] {
         if (!_metadata->moveFromFileDropToFiles()) {
             unlockFolder();

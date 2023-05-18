@@ -137,10 +137,10 @@ public:
     // DOES NOT take ownership of the device.
     explicit GETEncryptedFileJob(AccountPtr account, const QString &path, QIODevice *device,
         const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
-        qint64 resumeStart, EncryptedFile encryptedInfo, QObject *parent = nullptr);
+        qint64 resumeStart, FolderMetadata::FolderMetadata::EncryptedFile encryptedInfo, QObject *parent = nullptr);
     explicit GETEncryptedFileJob(AccountPtr account, const QUrl &url, QIODevice *device,
         const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
-        qint64 resumeStart, EncryptedFile encryptedInfo, QObject *parent = nullptr);
+        qint64 resumeStart, FolderMetadata::FolderMetadata::EncryptedFile encryptedInfo, QObject *parent = nullptr);
     ~GETEncryptedFileJob() override = default;
 
 protected:
@@ -148,7 +148,7 @@ protected:
 
 private:
     QSharedPointer<EncryptionHelper::StreamingDecryptor> _decryptor;
-    EncryptedFile _encryptedFileInfo = {};
+    FolderMetadata::EncryptedFile _encryptedFileInfo = {};
     QByteArray _pendingBytes;
     qint64 _processedSoFar = 0;
 };
@@ -254,7 +254,7 @@ private:
     QFile _tmpFile;
     bool _deleteExisting = false;
     bool _isEncrypted = false;
-    EncryptedFile _encryptedInfo;
+    FolderMetadata::EncryptedFile _encryptedInfo;
     ConflictRecord _conflictRecord;
 
     QElapsedTimer _stopwatch;

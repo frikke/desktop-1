@@ -1,12 +1,23 @@
 #pragma once
+/*
+ * Copyright (C) 2023 by Oleksandr Zolotov <alex@nextcloud.com>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ */
 
 #include "accountfwd.h"
-
 #include <QByteArray>
 #include <QHash>
 #include <QJsonObject>
 #include <QObject>
-#include <QPointer>
 #include <QSet>
 #include <QSharedPointer>
 #include <QSslCertificate>
@@ -17,15 +28,6 @@
 class QJsonDocument;
 namespace OCC
 {
-struct EncryptedFile {
-    QByteArray encryptionKey;
-    QByteArray mimetype;
-    QByteArray initializationVector;
-    QByteArray authenticationTag;
-    QString encryptedFilename;
-    QString originalFilename;
-};
-
 class OWNCLOUDSYNC_EXPORT FolderMetadata : public QObject
 {
     Q_OBJECT
@@ -43,21 +45,39 @@ public:
         Version2_0,
     };
 
+    struct EncryptedFile {
+        QByteArray encryptionKey;
+        QByteArray mimetype;
+        QByteArray initializationVector;
+        QByteArray authenticationTag;
+        QString encryptedFilename;
+        QString originalFilename;
+    };
+
+    struct OWNCLOUDSYNC_EXPORT TopLevelFolderInitializationData {
+        explicit TopLevelFolderInitializationData(const QString &path,
+                                         const QByteArray &keyForEncryption = {},
+                                         const QByteArray &keyForDecryption = {},
+                                         const QSet<QByteArray> &checksums = QSet<QByteArray>{});
+        static TopLevelFolderInitializationData makeDefault();
+        QString topLevelFolderPath;
+        QByteArray metadataKeyForEncryption;
+        QByteArray metadataKeyForDecryption;
+        QSet<QByteArray> keyChecksums;
+        [[nodiscard]] bool keysSet() const;
+    };
+
     FolderMetadata(AccountPtr account);
 
     FolderMetadata(AccountPtr account,
                    RequiredMetadataVersion requiredMetadataVersion,
                    const QByteArray &metadata,
-                   const QString &topLevelFolderPath,
-                   const QSharedPointer<FolderMetadata> &topLevelFolderMetadata = {},
-                   const QByteArray &metadataKeyForDecryption = {},
+                   const TopLevelFolderInitializationData &topLevelFolderInitializationData,
                    QObject *parent = nullptr);
 
     FolderMetadata(AccountPtr account,
                    const QByteArray &metadata,
-                   const QString &topLevelFolderPath,
-                   const QSharedPointer<FolderMetadata> &topLevelFolderMetadata = {},
-                   const QByteArray &metadataKeyForDecryption = {},
+                   const TopLevelFolderInitializationData &topLevelFolderInitializationData,
                    QObject *parent = nullptr);
 
     [[nodiscard]] QVector<EncryptedFile> files() const;
@@ -83,7 +103,11 @@ public:
 
     QByteArray encryptedMetadata();
 
-    RequiredMetadataVersion metadataVersion() const;
+    [[nodiscard]] RequiredMetadataVersion metadataVersion() const;
+
+    [[nodiscard]] float requiredMetadataVersionNumeric() const;
+
+    [[nodiscard]] bool isVersion2AndUp() const;
 
     [[nodiscard]] const QByteArray metadataKeyForDecryption() const;
 
@@ -104,9 +128,6 @@ private:
 
     [[nodiscard]] QByteArray computeMetadataKeyChecksum(const QByteArray &metadataKey) const;
 
-    [[nodiscard]] QByteArray encryptCipherText(const QByteArray &cipherText, const QByteArray &pass, const QByteArray &initiaizationVector, QByteArray &returnTag) const;
-    [[nodiscard]] QByteArray decryptCipherText(const QByteArray &encryptedCipherText, const QByteArray &pass, const QByteArray &initiaizationVector) const;
-
     [[nodiscard]] EncryptedFile parseEncryptedFileFromJson(const QString &encryptedFilename, const QJsonValue &fileJSON) const;
 
     [[nodiscard]] QJsonObject convertFileToJsonObject(const EncryptedFile *encryptedFile, const QByteArray &metadataKey) const;
@@ -118,21 +139,24 @@ public slots:
     void addEncryptedFile(const EncryptedFile &f);
     void removeEncryptedFile(const EncryptedFile &f);
     void removeAllEncryptedFiles();
-    void setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata);
+    void setMetadataKeyForEncryption(const QByteArray &metadataKeyForDecryption);
     void setMetadataKeyForDecryption(const QByteArray &metadataKeyForDecryption);
+    void setKeyChecksums(const QSet<QByteArray> &keyChecksums);
 
 private slots:
     void setupMetadata();
     void setupEmptyMetadata();
     void setupExistingMetadata(const QByteArray &metadata);
     void setupExistingLegacyMetadataForMigration(const QByteArray &metadata);
-    void setupExistingMetadataLatestVersion(const QByteArray &metadata);
+    void setupVersionFromExistingMetadata(const QByteArray &metadata);
+
     void startFetchTopLevelFolderMetadata();
     void fetchTopLevelFolderMetadata(const QByteArray &folderId);
     void topLevelFolderEncryptedIdReceived(const QStringList &list);
     void topLevelFolderEncryptedIdError(QNetworkReply *reply);
     void topLevelFolderEncryptedMetadataReceived(const QJsonDocument &json, int statusCode);
     void topLevelFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode);
+
     void updateUsersEncryptedMetadataKey();
     void createNewMetadataKeyForEncryption();
     void emitSetupComplete();
@@ -156,7 +180,6 @@ private:
     QVector<QPair<QString, QString>> _sharing;
     QByteArray _fileDropCipherTextEncryptedAndBase64;
     QByteArray _initialMetadata;
-    QSharedPointer<FolderMetadata> _topLevelFolderMetadata;
     QString _topLevelFolderPath;
     float _versionFromMetadata = -1.0f;
     QJsonObject _fileDrop;

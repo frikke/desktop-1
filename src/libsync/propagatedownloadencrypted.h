@@ -38,7 +38,7 @@ private:
   QString _localParentPath;
   SyncFileItemPtr _item;
   QFileInfo _info;
-  EncryptedFile _encryptedInfo;
+  FolderMetadata::EncryptedFile _encryptedInfo;
   QString _errorString;
   QString _remoteParentPath;
   QString _parentPathInDb;

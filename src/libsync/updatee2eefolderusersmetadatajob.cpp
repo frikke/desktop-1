@@ -1,5 +1,5 @@
 /*
- * Copyright (C) by Oleksandr Zolotov <alex@nextcloud.com>
+ * Copyright (C) 2023 by Oleksandr Zolotov <alex@nextcloud.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -108,19 +108,24 @@ void UpdateE2eeFolderUsersMetadataJob::setUserData(const QVariant &userData)
     _userData = userData;
 }
 
-void UpdateE2eeFolderUsersMetadataJob::setTopLevelFolderMetadata(const QSharedPointer<FolderMetadata> &topLevelFolderMetadata)
-{
-    _topLevelFolderMetadata = topLevelFolderMetadata;
-}
-
 void UpdateE2eeFolderUsersMetadataJob::setFolderToken(const QByteArray &folderToken)
 {
     _folderToken = folderToken;
 }
 
+void UpdateE2eeFolderUsersMetadataJob::setMetadataKeyForEncryption(const QByteArray &metadataKey)
+{
+    _metadataKeyForEncryption = metadataKey;
+}
+
 void UpdateE2eeFolderUsersMetadataJob::setMetadataKeyForDecryption(const QByteArray &metadataKey)
 {
     _metadataKeyForDecryption = metadataKey;
+}
+
+void UpdateE2eeFolderUsersMetadataJob::setKeyChecksums(const QSet<QByteArray> &keyChecksums)
+{
+    _keyChecksums = keyChecksums;
 }
 
 void UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain(const QSslCertificate certificate)
@@ -206,7 +211,14 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
     }
     const auto pathSanitized = _path.startsWith(QLatin1Char('/')) ? _path.mid(1) : _path;
     const auto topLevelFolderPath = rec.path() == pathSanitized ? QStringLiteral("/") : rec.path();
-    _folderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelFolderPath, _topLevelFolderMetadata, _metadataKeyForDecryption));
+    const FolderMetadata::TopLevelFolderInitializationData topLevelInitData(
+        topLevelFolderPath,
+        _metadataKeyForEncryption,
+        _metadataKeyForDecryption,
+        _keyChecksums
+    );
+    _folderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelInitData));
+    _folderMetadata->setKeyChecksums(_keyChecksums);
     connect(_folderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         if (!_folderMetadata->isMetadataSetup()) {
             slotUnlockFolder();
@@ -249,19 +261,14 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
     [[maybeunused]] const auto result = _journalDb->getFilesBelowPath(pathInDb.toUtf8(), [this](const SyncJournalFileRecord &record) -> void {
         if (record.isDirectory()) {
 
-            const auto reEncryptE2EeFolderMetatadaJob = new UpdateE2eeFolderUsersMetadataJob(_account,
-                                                                                             _journalDb,
-                                                                                             _syncFolderRemotePath,
-                                                                                             UpdateE2eeFolderUsersMetadataJob::ReEncrypt,
-                                                                                             QString::fromUtf8(record._e2eMangledName));
-            _folderUserId, QSslCertificate{},
-            reEncryptE2EeFolderMetatadaJob->setTopLevelFolderMetadata(_folderMetadata);
-            reEncryptE2EeFolderMetatadaJob->setMetadataKeyForDecryption(_folderMetadata->metadataKeyForDecryption());
-            reEncryptE2EeFolderMetatadaJob->setParent(this);
-            reEncryptE2EeFolderMetatadaJob->setFolderToken(_folderToken);
-            const auto fileId = record._fileId;
-            _subJobs.insert(reEncryptE2EeFolderMetatadaJob);
-            connect(reEncryptE2EeFolderMetatadaJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, &UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished);
+            const auto subJob = new UpdateE2eeFolderUsersMetadataJob(_account, _journalDb, _syncFolderRemotePath, UpdateE2eeFolderUsersMetadataJob::ReEncrypt, QString::fromUtf8(record._e2eMangledName));
+            subJob->setMetadataKeyForEncryption(_folderMetadata->metadataKeyForEncryption());
+            subJob->setMetadataKeyForDecryption(_folderMetadata->metadataKeyForDecryption());
+            subJob->setKeyChecksums(_folderMetadata->keyChecksums());
+            subJob->setParent(this);
+            subJob->setFolderToken(_folderToken);
+            _subJobs.insert(subJob);
+            connect(subJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, &UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished);
         }
     });
 }
