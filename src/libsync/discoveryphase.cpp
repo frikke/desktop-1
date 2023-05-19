@@ -673,6 +673,7 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         _isFileDropDetected = _e2EeFolderMetadata->isFileDropPresent();
         _encryptedMetadataNeedUpdate = _e2EeFolderMetadata->encryptedMetadataNeedUpdate();
+
         const auto encryptedFiles = _e2EeFolderMetadata->files();
 
         const auto findEncryptedFile = [=](const QString &name) {

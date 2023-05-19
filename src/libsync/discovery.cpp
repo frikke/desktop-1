@@ -1911,7 +1911,10 @@ DiscoverySingleDirectoryJob *ProcessDirectoryJob::startAsyncServerQuery()
                 _discoveryData->_topLevelE2eeFoldersMetadata[_dirItem->_file + QLatin1Char('/')] = serverJob->e2eeFolderMetadata();
             }
             _dirItem->_isFileDropDetected = serverJob->isFileDropDetected();
-            _dirItem->_isEncryptedMetadataNeedUpdate = serverJob->encryptedMetadataNeedUpdate();
+            SyncJournalFileRecord record;
+            const auto alreadySynced = _discoveryData->_statedb->getFileRecord(_dirItem->_file, &record) && record.isValid();
+            _dirItem->_isEncryptedMetadataNeedUpdate = serverJob->encryptedMetadataNeedUpdate() && alreadySynced;
+            _discoveryData->_anotherSyncNeeded = !alreadySynced && serverJob->encryptedMetadataNeedUpdate();
             qCInfo(lcDisco) << "serverJob has finished for folder:" << _dirItem->_file << " and it has _isFileDropDetected:" << true;
         }
         _discoveryData->_currentlyActiveJobs--;
