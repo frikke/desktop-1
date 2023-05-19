@@ -690,7 +690,7 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
                 const auto currentDirJob = directories.top().second;
                 currentDirJob->appendJob(directoryPropagationJob.get());
             }
-            item->_instruction = CSYNC_INSTRUCTION_NONE;
+            item->_instruction = CSYNC_INSTRUCTION_UPDATE_METADATA;
             _anotherSyncNeeded = true;
         }
     }

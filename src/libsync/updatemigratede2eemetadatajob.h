@@ -39,9 +39,9 @@ private slots:
     void start();
 
 private:
+    SyncFileItemPtr _item;
     QString _path;
     QString _folderRemotePath;
-    SyncFileItemPtr _item;
 };
 
 }

@@ -702,6 +702,11 @@ FolderMetadata::RequiredMetadataVersion FolderMetadata::metadataVersion() const
     return RequiredMetadataVersion::Version1;
 }
 
+FolderMetadata::RequiredMetadataVersion FolderMetadata::requiredMetadataVersion() const
+{
+    return _requiredMetadataVersion;
+}
+
 bool FolderMetadata::isVersion2AndUp() const
 {
     return static_cast<int>(metadataVersion()) >= static_cast<int>(RequiredMetadataVersion::Version2_0);

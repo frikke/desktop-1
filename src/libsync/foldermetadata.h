@@ -105,6 +105,8 @@ public:
 
     [[nodiscard]] RequiredMetadataVersion metadataVersion() const;
 
+    [[nodiscard]] RequiredMetadataVersion requiredMetadataVersion() const;
+
     [[nodiscard]] bool isVersion2AndUp() const;
 
     [[nodiscard]] const QByteArray metadataKeyForDecryption() const;

@@ -17,6 +17,7 @@
 
 #include "account.h"
 #include "gui/sharemanager.h"
+#include "syncfileitem.h"
 
 #include <QHash>
 #include <QObject>
@@ -44,7 +45,7 @@ public:
 public:
     [[nodiscard]] QString path() const;
     [[nodiscard]] QVariant userData() const;
-    bool _isSuccess = false;
+    [[nodiscard]] SyncFileItem::EncryptionStatus encryptionStatus() const;
 
 public slots:
     void start();
@@ -96,7 +97,7 @@ private:
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
     QVariant _userData;
-    QStringList _recordsToUpdate;
+    QStringList _pathsForDbRecordsToUpdate;
 };
 
 }

@@ -39,9 +39,9 @@ UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator 
                                                              const QString &path,
                                                              const QString &folderRemotePath)
     : PropagatorJob(propagator)
+    , _item(syncFileItem)
     , _path(path)
     , _folderRemotePath(folderRemotePath)
-    , _item(syncFileItem)
 {
 }
 
@@ -56,11 +56,14 @@ void UpdateMigratedE2eeMetadataJob::start()
                                                                                      propagator()->account()->e2e()->_certificate);
     updateMedatadaAndSubfoldersJob->setParent(this);
     updateMedatadaAndSubfoldersJob->start();
-    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this, updateMedatadaAndSubfoldersJob]() {
-        if (updateMedatadaAndSubfoldersJob->_isSuccess) {
-            _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0;
+    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this, updateMedatadaAndSubfoldersJob](const int code, const QString& message) {
+        if (code == 200) {
+            _item->_e2eEncryptionStatus = updateMedatadaAndSubfoldersJob->encryptionStatus();
+            emit finished(SyncFileItem::Status::Success);
+        } else {
+            _item->_errorString = message;
+            emit finished(SyncFileItem::Status::NormalError);
         }
-        emit finished(SyncFileItem::Status::Success);
     });
 }
 
