@@ -647,7 +647,7 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
                 directories[i].second->_item->_instruction = CSYNC_INSTRUCTION_NONE;
             }
         }
-    } else {
+    } else if (!item->_isEncryptedMetadataNeedUpdate) {
         const auto currentDirJob = directories.top().second;
         currentDirJob->appendJob(directoryPropagationJob.get());
     }
@@ -668,7 +668,7 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
             item->_status = SyncFileItem::NormalError;
             emit itemCompleted(item, OCC::ErrorCategory::GenericError);
         } else {
-            const auto itemPath = item->_encryptedFileName.isEmpty() ? item->_file : item->_file.split('/').first();
+            const auto itemPath = item->_file.split('/').first();
             const auto itemFullRemotePath = fullRemotePath(itemPath);
             auto isJobAlreadyAppended = false;
 
@@ -679,8 +679,16 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
                 }
             }
             if (!isJobAlreadyAppended) {
+                SyncFileItemPtr topLevelitem = item;
+                for (const auto &directory : directories) {
+                    if (directory.first == QString(itemPath + "/")) {
+                        topLevelitem = directory.second->_item;
+                    }
+                }
                 _appendedMigrationJobs.insert(itemFullRemotePath);
-                directoryPropagationJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, itemFullRemotePath, remotePath()));
+                directoryPropagationJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, topLevelitem, itemFullRemotePath, remotePath()));
+                const auto currentDirJob = directories.top().second;
+                currentDirJob->appendJob(directoryPropagationJob.get());
             }
             item->_instruction = CSYNC_INSTRUCTION_NONE;
             _anotherSyncNeeded = true;

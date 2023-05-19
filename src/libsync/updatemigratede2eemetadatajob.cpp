@@ -35,11 +35,13 @@ Q_LOGGING_CATEGORY(lcUpdateMigratedE2eeMetadataJob, "nextcloud.sync.propagator.u
 namespace OCC {
 
 UpdateMigratedE2eeMetadataJob::UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator,
+                                                             const SyncFileItemPtr &syncFileItem,
                                                              const QString &path,
                                                              const QString &folderRemotePath)
     : PropagatorJob(propagator)
     , _path(path)
     , _folderRemotePath(folderRemotePath)
+    , _item(syncFileItem)
 {
 }
 
@@ -54,7 +56,10 @@ void UpdateMigratedE2eeMetadataJob::start()
                                                                                      propagator()->account()->e2e()->_certificate);
     updateMedatadaAndSubfoldersJob->setParent(this);
     updateMedatadaAndSubfoldersJob->start();
-    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this]() {
+    connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this, updateMedatadaAndSubfoldersJob]() {
+        if (updateMedatadaAndSubfoldersJob->_isSuccess) {
+            _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0;
+        }
         emit finished(SyncFileItem::Status::Success);
     });
 }

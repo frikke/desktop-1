@@ -27,7 +27,7 @@ class OWNCLOUDSYNC_EXPORT UpdateMigratedE2eeMetadataJob : public PropagatorJob
     Q_OBJECT
 
 public:
-    explicit UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const QString &path, const QString &folderRemotePath);
+    explicit UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const SyncFileItemPtr &syncFileItem, const QString &path, const QString &folderRemotePath);
 
     bool scheduleSelfOrChild() override;
 
@@ -41,6 +41,7 @@ private slots:
 private:
     QString _path;
     QString _folderRemotePath;
+    SyncFileItemPtr _item;
 };
 
 }

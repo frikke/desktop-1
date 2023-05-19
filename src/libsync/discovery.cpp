@@ -982,6 +982,10 @@ void ProcessDirectoryJob::processFileAnalyzeLocalInfo(
             item->_status = SyncFileItem::Status::NormalError;
         }
 
+        if (dbEntry.isValid() && item->isDirectory()) {
+            item->_e2eEncryptionStatus = EncryptionStatusEnums::fromDbEncryptionStatus(dbEntry._e2eEncryptionStatus);
+        }
+
         auto recurseQueryLocal = _queryLocal == ParentNotChanged ? ParentNotChanged : localEntry.isDirectory || item->_instruction == CSYNC_INSTRUCTION_RENAME ? NormalQuery : ParentDontExist;
         processFileFinalize(item, path, recurse, recurseQueryLocal, recurseQueryServer);
     };

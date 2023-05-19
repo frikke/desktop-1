@@ -258,7 +258,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
 {
     const auto pathInDb = _path.mid(_syncFolderRemotePath.size());
 
-    [[maybeunused]] const auto result = _journalDb->getFilesBelowPath(pathInDb.toUtf8(), [this](const SyncJournalFileRecord &record) -> void {
+    [[maybeunused]] const auto result = _journalDb->getFilesBelowPath(pathInDb.toUtf8(), [this](const SyncJournalFileRecord &record) {
         if (record.isDirectory()) {
 
             const auto subJob = new UpdateE2eeFolderUsersMetadataJob(_account, _journalDb, _syncFolderRemotePath, UpdateE2eeFolderUsersMetadataJob::ReEncrypt, QString::fromUtf8(record._e2eMangledName));
@@ -268,6 +268,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
             subJob->setParent(this);
             subJob->setFolderToken(_folderToken);
             _subJobs.insert(subJob);
+            _recordsToUpdate.push_back(record._path);
             connect(subJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, &UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished);
         }
     });
@@ -303,12 +304,14 @@ void UpdateE2eeFolderUsersMetadataJob::slotUnlockFolder()
         qCDebug(lcUpdateE2eeFolderUsersMetadataJob) << "Successfully Unlocked";
         _folderToken = "";
         _folderId = "";
+        _isSuccess = true;
 
-        SyncJournalFileRecord rec;
-        _journalDb->getFileRecord(_path, &rec);
-        //rec._e2eEncryptionStatus = SyncFileItem::toDbEncryptionStatus(_folderMetadata->metadataVersion());
-        rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
-        _journalDb->setFileRecord(rec);
+        for (const auto &recordPath : _recordsToUpdate) {
+            SyncJournalFileRecord rec;
+            _journalDb->getFileRecord(recordPath, &rec);
+            rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
+            _journalDb->setFileRecord(rec);
+        }
 
         slotFolderUnlocked(folderId, 200);
     });

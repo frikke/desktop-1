@@ -105,7 +105,7 @@ public:
 
     [[nodiscard]] RequiredMetadataVersion metadataVersion() const;
 
-    [[nodiscard]] float requiredMetadataVersionNumeric() const;
+    [[nodiscard]] double requiredMetadataVersionNumeric() const;
 
     [[nodiscard]] bool isVersion2AndUp() const;
 

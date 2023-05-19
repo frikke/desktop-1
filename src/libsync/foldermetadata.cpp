@@ -259,6 +259,7 @@ void FolderMetadata::setupExistingMetadata(const QByteArray &metadata)
             _files.push_back(file);
         }
     }
+    _isMetadataSetup = true;
 }
 
 void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &metadata)
@@ -377,10 +378,10 @@ void FolderMetadata::setupVersionFromExistingMetadata(const QByteArray &metadata
     const auto metadataObj = metaDataDoc.object()[metadataJsonKey].toObject();
 
     if (metadataObj.contains(versionKey)) {
-        _versionFromMetadata = metadataObj[versionKey].toInt();
+        _versionFromMetadata = metadataObj[versionKey].toDouble();
     }
     if (metaDataDoc.object().contains(versionKey)) {
-        _versionFromMetadata = metaDataDoc.object()[versionKey].toInt();
+        _versionFromMetadata = metaDataDoc.object()[versionKey].toDouble();
     }
 }
 
@@ -696,15 +697,15 @@ FolderMetadata::RequiredMetadataVersion FolderMetadata::metadataVersion() const
     return RequiredMetadataVersion::Version2_0;
 }
 
-float FolderMetadata::requiredMetadataVersionNumeric() const
+double FolderMetadata::requiredMetadataVersionNumeric() const
 {
     switch (_requiredMetadataVersion) {
     case RequiredMetadataVersion::Version1:
-        return 1.0f;
+        return 1.0;
     case RequiredMetadataVersion::Version1_2:
-        return 1.2f;
+        return 1.2;
     case RequiredMetadataVersion::Version2_0:
-        return 2.0f;
+        return 2.0;
     }
     return 2.0f;
 }

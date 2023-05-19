@@ -44,6 +44,7 @@ public:
 public:
     [[nodiscard]] QString path() const;
     [[nodiscard]] QVariant userData() const;
+    bool _isSuccess = false;
 
 public slots:
     void start();
@@ -95,6 +96,7 @@ private:
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
     QVariant _userData;
+    QStringList _recordsToUpdate;
 };
 
 }
