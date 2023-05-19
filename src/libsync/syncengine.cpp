@@ -502,6 +502,12 @@ void SyncEngine::startSync()
         return;
     }
 
+    _journal->listAllTopLevelE2eeFolders([this](const SyncJournalFileRecord &record) {
+        if (record._e2eEncryptionStatus < SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0) {
+            _journal->schedulePathForRemoteDiscovery(record.path());
+        }
+    });
+
     s_anySyncRunning = true;
     _syncRunning = true;
     _anotherSyncNeeded = NoFollowUpSync;

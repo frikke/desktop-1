@@ -304,6 +304,12 @@ void UpdateE2eeFolderUsersMetadataJob::slotUnlockFolder()
         _folderToken = "";
         _folderId = "";
 
+        SyncJournalFileRecord rec;
+        _journalDb->getFileRecord(_path, &rec);
+        //rec._e2eEncryptionStatus = SyncFileItem::toDbEncryptionStatus(_folderMetadata->metadataVersion());
+        rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
+        _journalDb->setFileRecord(rec);
+
         slotFolderUnlocked(folderId, 200);
     });
     connect(unlockJob, &UnlockEncryptFolderApiJob::error, [this](const QByteArray &folderId, int httpStatus) {
