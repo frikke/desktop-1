@@ -21,6 +21,7 @@
 #include "common/asserts.h"
 #include "encryptfolderjob.h"
 #include "filesystem.h"
+#include <csync/csync.h>
 
 #include <QFile>
 #include <QLoggingCategory>
@@ -240,11 +241,14 @@ void PropagateRemoteMkdir::slotMkcolJobFinished()
     }
 }
 
-void PropagateRemoteMkdir::slotEncryptFolderFinished()
+void PropagateRemoteMkdir::slotEncryptFolderFinished(int status, EncryptionStatusEnums::ItemEncryptionStatus encryptionStatus)
 {
+    Q_UNUSED(status);
     qCDebug(lcPropagateRemoteMkdir) << "Success making the new folder encrypted";
     propagator()->_activeJobList.removeOne(this);
-    _item->_e2eEncryptionStatus = SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0;
+    _item->_e2eEncryptionStatus = encryptionStatus;
+    _item->_e2eEncryptionStatusRemote = encryptionStatus;
+    _item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(propagator()->account()->capabilities().clientSideEncryptionVersion());
     success();
 }
 

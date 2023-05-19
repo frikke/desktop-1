@@ -491,8 +491,6 @@ void ShareManager::createShare(const QString &path,
 void ShareManager::createE2EeShareJob(const QString &path,
                                       const ShareePtr sharee,
                                       const Share::Permissions permissions,
-                                      const QByteArray &folderId,
-                                      const QString &folderAlias,
                                       const QString &password)
 {
     Folder *folder = nullptr;

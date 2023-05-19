@@ -50,7 +50,7 @@ class SyncJournalFileRecord;
 
 namespace EncryptionStatusEnums {
 
-Q_NAMESPACE
+OCSYNC_EXPORT Q_NAMESPACE
 
 enum class ItemEncryptionStatus : int {
     NotEncrypted = 0,
@@ -61,6 +61,7 @@ enum class ItemEncryptionStatus : int {
 
 Q_ENUM_NS(ItemEncryptionStatus)
 
+OCSYNC_EXPORT Q_NAMESPACE
 enum class JournalDbEncryptionStatus : int {
     NotEncrypted = 0,
     Encrypted = 1,
@@ -74,6 +75,8 @@ Q_ENUM_NS(JournalDbEncryptionStatus)
 ItemEncryptionStatus fromDbEncryptionStatus(JournalDbEncryptionStatus encryptionStatus);
 
 JournalDbEncryptionStatus toDbEncryptionStatus(ItemEncryptionStatus encryptionStatus);
+
+ItemEncryptionStatus fromEndToEndEncryptionApiVersion(const double version);
 
 }
 

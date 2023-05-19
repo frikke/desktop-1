@@ -1147,7 +1147,7 @@ void ShareModel::createNewUserGroupShare(const ShareePtr &sharee)
             qCWarning(lcShareModel) << "Could not share an E2EE folder" << _localPath << "no responsible folder found";
             return;
         }
-        _manager->createE2EeShareJob(_sharePath, sharee, _maxSharingPermissions, _folderId, _folder->alias(), {});
+        _manager->createE2EeShareJob(_sharePath, sharee, _maxSharingPermissions, {});
     } else {
         _manager->createShare(_sharePath, Share::ShareType(sharee->type()), sharee->shareWith(), _maxSharingPermissions, {});
     }

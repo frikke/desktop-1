@@ -67,7 +67,7 @@ void EncryptFolderJob::slotEncryptionFlagSuccess(const QByteArray &fileId)
         qCWarning(lcEncryptFolderJob) << "No valid record found in local DB for fileId" << fileId;
     }
 
-    rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
+    rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::Encrypted;
     const auto result = _journal->setFileRecord(rec);
     if (!result) {
         qCWarning(lcEncryptFolderJob) << "Error when setting the file record to the database" << rec._path << result.error();
@@ -87,7 +87,7 @@ void EncryptFolderJob::slotEncryptionFlagError(const QByteArray &fileId,
 {
     qDebug() << "Error on the encryption flag of" << fileId << "HTTP code:" << httpErrorCode;
     _errorString = errorMessage;
-    emit finished(Error);
+    emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
 }
 
 void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, const QByteArray &token)
@@ -96,11 +96,11 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
     const auto currentPath = !_pathNonEncrypted.isEmpty() ? _pathNonEncrypted : _path;
     SyncJournalFileRecord rec;
     if (!_journal->getTopLevelE2eFolderRecord(currentPath, &rec)) {
-        emit finished(Error);
+        emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
         return;
     }
-    const auto topLevelFolderPath = rec.path() == currentPath ? QStringLiteral("/") : rec.path();
-    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
+    const auto rootE2eeFolderPath = rec.path() == currentPath ? QStringLiteral("/") : rec.path();
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, metadata] {
         const auto encryptedMetadata = metadata->encryptedMetadata();
         if (encryptedMetadata.isEmpty()) {
@@ -108,9 +108,11 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
             _errorString =
                 tr("Could not generate the metadata for encryption, Unlocking the folder.\n"
                    "This can be an issue with your OpenSSL libraries.");
-            emit finished(Error);
+            emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
             return;
         }
+
+        _folderEncryptionStatus = FolderMetadata::fromMedataVersionToItemEncryptionStatus(metadata->encryptedMetadataVersion());
 
         const auto storeMetadataJob = new StoreMetaDataApiJob(_account, fileId, encryptedMetadata, this);
         connect(storeMetadataJob, &StoreMetaDataApiJob::success, this, &EncryptFolderJob::slotUploadMetadataSuccess);
@@ -147,7 +149,7 @@ void EncryptFolderJob::slotLockForEncryptionError(const QByteArray &fileId,
 {
     qCInfo(lcEncryptFolderJob()) << "Locking error for" << fileId << "HTTP code:" << httpErrorCode;
     _errorString = errorMessage;
-    emit finished(Error);
+    emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
 }
 
 void EncryptFolderJob::slotUnlockFolderError(const QByteArray &fileId,
@@ -156,12 +158,12 @@ void EncryptFolderJob::slotUnlockFolderError(const QByteArray &fileId,
 {
     qCInfo(lcEncryptFolderJob()) << "Unlocking error for" << fileId << "HTTP code:" << httpErrorCode;
     _errorString = errorMessage;
-    emit finished(Error);
+    emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
 }
 void EncryptFolderJob::slotUnlockFolderSuccess(const QByteArray &fileId)
 {
     qCInfo(lcEncryptFolderJob()) << "Unlocking success for" << fileId;
-    emit finished(Success);
+    emit finished(Success, _folderEncryptionStatus);
     return;
 }
 

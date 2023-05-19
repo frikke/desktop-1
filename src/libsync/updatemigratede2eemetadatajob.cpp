@@ -59,6 +59,7 @@ void UpdateMigratedE2eeMetadataJob::start()
     connect(updateMedatadaAndSubfoldersJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, [this, updateMedatadaAndSubfoldersJob](const int code, const QString& message) {
         if (code == 200) {
             _item->_e2eEncryptionStatus = updateMedatadaAndSubfoldersJob->encryptionStatus();
+            _item->_e2eEncryptionStatusRemote = updateMedatadaAndSubfoldersJob->encryptionStatus();
             emit finished(SyncFileItem::Status::Success);
         } else {
             _item->_errorString = message;

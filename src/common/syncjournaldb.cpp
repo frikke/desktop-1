@@ -1031,7 +1031,7 @@ bool SyncJournalDb::getTopLevelE2eFolderRecord(const QString &remoteFolderPath, 
     return true;
 }
 
-bool SyncJournalDb::listAllTopLevelE2eeFolders(const std::function<void(const SyncJournalFileRecord &)> &rowCallback)
+bool SyncJournalDb::listAllE2eeFoldersWithEncryptionStatusLessThan(const int status, const std::function<void(const SyncJournalFileRecord &)> &rowCallback)
 {
     QMutexLocker locker(&_mutex);
 
@@ -1040,13 +1040,14 @@ bool SyncJournalDb::listAllTopLevelE2eeFolders(const std::function<void(const Sy
 
     if (!checkConnect())
         return false;
-    const auto query = _queryManager.get(PreparedSqlQueryManager::ListAllTopLevelE2eeFoldersQuery,
-                                         QByteArrayLiteral(GET_FILE_RECORD_QUERY " WHERE isE2eEncrypted >= ?1 AND type == 2 ORDER BY path||'/' ASC"),
+    const auto query = _queryManager.get(PreparedSqlQueryManager::ListAllTopLevelE2eeFoldersStatusLessThanQuery,
+                                         QByteArrayLiteral(GET_FILE_RECORD_QUERY " WHERE type == 2 AND isE2eEncrypted >= ?1 AND isE2eEncrypted < ?2 ORDER BY path||'/' ASC"),
                                          _db);
     if (!query) {
         return false;
     }
     query->bindValue(1, SyncJournalFileRecord::EncryptionStatus::Encrypted);
+    query->bindValue(2, status);
 
     if (!query->exec())
         return false;

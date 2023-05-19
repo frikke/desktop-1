@@ -58,15 +58,7 @@ QVariant UpdateE2eeFolderUsersMetadataJob::userData() const
 
 SyncFileItem::EncryptionStatus UpdateE2eeFolderUsersMetadataJob::encryptionStatus() const
 {
-    switch (_folderMetadata->requiredMetadataVersion()) {
-    case FolderMetadata::RequiredMetadataVersion::Version1:
-        return SyncFileItem::EncryptionStatus::Encrypted;
-    case FolderMetadata::RequiredMetadataVersion::Version1_2:
-        return SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2;
-    case FolderMetadata::RequiredMetadataVersion::Version2_0:
-        return SyncFileItem::EncryptionStatus::EncryptedMigratedV2_0;
-    }
-    return SyncFileItem::EncryptionStatus::NotEncrypted;
+    return FolderMetadata::fromMedataVersionToItemEncryptionStatus(_folderMetadata->encryptedMetadataVersion());
 }
 
 void UpdateE2eeFolderUsersMetadataJob::start()
@@ -223,9 +215,9 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
         return;
     }
     const auto pathSanitized = _path.startsWith(QLatin1Char('/')) ? _path.mid(1) : _path;
-    const auto topLevelFolderPath = rec.path() == pathSanitized ? QStringLiteral("/") : rec.path();
-    const FolderMetadata::TopLevelFolderInitializationData topLevelInitData(
-        topLevelFolderPath,
+    const auto rootE2eeFolderPath = rec.path() == pathSanitized ? QStringLiteral("/") : rec.path();
+    const FolderMetadata::RootEncryptedFolderInfo topLevelInitData(
+        rootE2eeFolderPath,
         _metadataKeyForEncryption,
         _metadataKeyForDecryption,
         _keyChecksums
@@ -233,7 +225,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
     _folderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelInitData));
     _folderMetadata->setKeyChecksums(_keyChecksums);
     connect(_folderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
-        if (!_folderMetadata->isMetadataSetup()) {
+        if (!_folderMetadata->isValid()) {
             slotUnlockFolder();
             return;
         }
@@ -271,7 +263,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
 {
     const auto pathInDb = _path.mid(_syncFolderRemotePath.size());
 
-    [[maybeunused]] const auto result = _journalDb->getFilesBelowPath(pathInDb.toUtf8(), [this](const SyncJournalFileRecord &record) {
+    [[maybe_unused]] const auto result = _journalDb->getFilesBelowPath(pathInDb.toUtf8(), [this](const SyncJournalFileRecord &record) {
         if (record.isDirectory()) {
             const auto subJob = new UpdateE2eeFolderUsersMetadataJob(_account, _journalDb, _syncFolderRemotePath, UpdateE2eeFolderUsersMetadataJob::ReEncrypt, QString::fromUtf8(record._e2eMangledName));
             subJob->setMetadataKeyForEncryption(_folderMetadata->metadataKeyForEncryption());
@@ -320,7 +312,8 @@ void UpdateE2eeFolderUsersMetadataJob::slotUnlockFolder()
         for (const auto &recordPath : _pathsForDbRecordsToUpdate) {
             SyncJournalFileRecord rec;
             [[maybe_unused]] const auto resultGet = _journalDb->getFileRecord(recordPath, &rec);
-            rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
+            rec._e2eEncryptionStatus = EncryptionStatusEnums::toDbEncryptionStatus(
+                FolderMetadata::fromMedataVersionToItemEncryptionStatus(_folderMetadata->encryptedMetadataVersion()));
             [[maybe_unused]] const auto resultSet = _journalDb->setFileRecord(rec);
         }
 

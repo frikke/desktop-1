@@ -37,6 +37,8 @@
 #include <QJsonArray>
 #include <QCryptographicHash>
 
+#include <KCompressionDevice>
+
 #include <map>
 #include <string>
 #include <algorithm>
@@ -920,16 +922,16 @@ QByteArray ClientSideEncryption::generateSignatureCMS(const QByteArray &data) co
     CMS_ContentInfo_print_ctx(cmsOut, contentInfo, 0, nullptr);
 
     ClientSideEncryption::Bio cmsOut2;
-    const auto result = PEM_write_bio_CMS(cmsOut2, contentInfo);
+    [[maybe_unused]] const auto result = PEM_write_bio_CMS(cmsOut2, contentInfo);
 
     ClientSideEncryption::Bio i2dCmsBioOut;
-    auto resultI2dCms = i2d_CMS_bio(i2dCmsBioOut, contentInfo);
+    [[maybe_unused]] auto resultI2dCms = i2d_CMS_bio(i2dCmsBioOut, contentInfo);
     const auto i2dCmsBio = BIO2ByteArray(i2dCmsBioOut);
 
     ClientSideEncryption::Bio dataBioForVerification;
     BIO_write(dataBioForVerification, data.constData(), data.size());
 
-    auto verifyResult = verifySignatureCMS(i2dCmsBio, data);
+    [[maybe_unused]] auto verifyResult = verifySignatureCMS(i2dCmsBio, data);
     return i2dCmsBio;
 }
 
@@ -960,7 +962,6 @@ bool ClientSideEncryption::verifySignatureCMS(const QByteArray &cmsContent, cons
         const auto publicKey = ClientSideEncryption::PKey::readPublicKey(publicKeyBio);
 
         int numSigners = sk_X509_num(signers);
-        char signerFile_buffer[128];
         for (int i = 0; i < numSigners; ++i) {
             X509 *signer = sk_X509_value(signers, i);
             if (X509_verify(signer, publicKey) != 0) {
@@ -1919,6 +1920,60 @@ bool EncryptionHelper::dataDecryption(const QByteArray &key, const QByteArray &i
     inputBuffer.close();
     outputBuffer.close();
     return true;
+}
+
+QByteArray EncryptionHelper::gZipThenEncryptData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv, QByteArray &returnTag)
+{
+    QBuffer gZipBuffer;
+    auto gZipCompressionDevice = KCompressionDevice(&gZipBuffer, false, KCompressionDevice::GZip);
+    if (!gZipCompressionDevice.open(QIODevice::WriteOnly)) {
+        return {};
+    }
+    const auto bytesWritten = gZipCompressionDevice.write(inputData);
+    gZipCompressionDevice.close();
+    if (bytesWritten < 0) {
+        return {};
+    }
+
+    if (!gZipBuffer.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+
+    QByteArray outputData;
+    returnTag.clear();
+    const auto gZippedAndNotEncrypted = gZipBuffer.readAll();
+    EncryptionHelper::dataEncryption(key, iv, gZippedAndNotEncrypted, outputData, returnTag);
+    gZipBuffer.close();
+    return outputData;
+}
+
+QByteArray EncryptionHelper::decryptThenUnGzipData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv)
+{
+    QByteArray decryptedAndUnGzipped;
+    if (!EncryptionHelper::dataDecryption(key, iv, inputData, decryptedAndUnGzipped)) {
+        qCDebug(lcCse()) << "Could not decrypt";
+        return {};
+    }
+
+    QBuffer gZipBuffer;
+    if (!gZipBuffer.open(QIODevice::WriteOnly)) {
+        return {};
+    }
+    const auto bytesWritten = gZipBuffer.write(decryptedAndUnGzipped);
+    gZipBuffer.close();
+    if (bytesWritten < 0) {
+        return {};
+    }
+
+    auto gZipUnCompressionDevice = KCompressionDevice(&gZipBuffer, false, KCompressionDevice::GZip);
+    if (!gZipUnCompressionDevice.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+
+    decryptedAndUnGzipped = gZipUnCompressionDevice.readAll();
+    gZipUnCompressionDevice.close();
+
+    return decryptedAndUnGzipped;
 }
 
 EncryptionHelper::StreamingDecryptor::StreamingDecryptor(const QByteArray &key, const QByteArray &iv, quint64 totalSize) : _totalSize(totalSize)

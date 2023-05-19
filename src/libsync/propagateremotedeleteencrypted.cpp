@@ -58,10 +58,10 @@ void PropagateRemoteDeleteEncrypted::slotFolderEncryptedMetadataReceived(const Q
         return;
     }
 
-    const auto topLevelFolderPath = rec.path() == fullFolderRemotePathSanitized ? QStringLiteral("/") : rec.path();
-    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
+    const auto rootE2eeFolderPath = rec.path() == fullFolderRemotePathSanitized ? QStringLiteral("/") : rec.path();
+    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
     connect(metadata, &FolderMetadata::setupComplete, this, [this, metadata] {
-        if (!metadata->isMetadataSetup()) {
+        if (!metadata->isValid()) {
             taskFailed();
             metadata->deleteLater();
             return;

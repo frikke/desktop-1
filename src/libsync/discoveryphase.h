@@ -150,6 +150,8 @@ public:
     [[nodiscard]] bool isFileDropDetected() const;
     [[nodiscard]] QSharedPointer<FolderMetadata> e2eeFolderMetadata() const;
     [[nodiscard]] bool encryptedMetadataNeedUpdate() const;
+    [[nodiscard]] SyncFileItem::EncryptionStatus currentEncryptionStatus() const;
+    [[nodiscard]] SyncFileItem::EncryptionStatus requiredEncryptionStatus() const;
 
     // This is not actually a network job, it is just a job
 signals:
@@ -170,7 +172,7 @@ private slots:
 
 private:
 
-    [[nodiscard]] bool isE2eEncrypted() const { return _encryptionStatus != SyncFileItem::EncryptionStatus::NotEncrypted; }
+    [[nodiscard]] bool isE2eEncrypted() const { return _encryptionStatusCurrent != SyncFileItem::EncryptionStatus::NotEncrypted; }
 
     QVector<RemoteInfo> _results;
     QString _subPath;
@@ -186,9 +188,10 @@ private:
     // If this directory is an external storage (The first item has 'M' in its permission)
     bool _isExternalStorage = false;
     // If this directory is e2ee
-    SyncFileItem::EncryptionStatus _encryptionStatus = SyncFileItem::EncryptionStatus::NotEncrypted;
+    SyncFileItem::EncryptionStatus _encryptionStatusCurrent = SyncFileItem::EncryptionStatus::NotEncrypted;
     bool _isFileDropDetected = false;
     bool _encryptedMetadataNeedUpdate = false;
+    SyncFileItem::EncryptionStatus _encryptionStatusRequired = SyncFileItem::EncryptionStatus::NotEncrypted;
     // If set, the discovery will finish with an error
     int64_t _size = 0;
     QString _error;
@@ -197,7 +200,7 @@ private:
     QSharedPointer<FolderMetadata> _e2EeFolderMetadata;
     QSharedPointer<FolderMetadata> _topLevelE2eeFolderMetadata;
 
-    QSet<QString> _listTopLevelE2eeFolders;
+    QSet<QString> _listRootE2eeFolders;
 
     QMap<QString, QSharedPointer<FolderMetadata>> _topLevelE2eeFoldersMetadata;
 
@@ -320,9 +323,9 @@ public:
 
     QStringList _listExclusiveFiles;
 
-    QSet<QString> _listTopLevelE2eeFolders;
+    QSet<QString> _listRootE2eeFolders;
 
-    QMap<QString, QSharedPointer<FolderMetadata>> _topLevelE2eeFoldersMetadata;
+    QMap<QString, QSharedPointer<FolderMetadata>> _rootE2eeFoldersMetadata;
 
 signals:
     void fatalError(const QString &errorString, const OCC::ErrorCategory errorCategory);

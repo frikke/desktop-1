@@ -127,10 +127,6 @@ QNetworkReply *AbstractNetworkJob::addTimer(QNetworkReply *reply)
 QNetworkReply *AbstractNetworkJob::sendRequest(const QByteArray &verb, const QUrl &url,
     QNetworkRequest req, QIODevice *requestBody)
 {
-    if (verb == "PROPFIND" && url.toString().contains("newly-enc-v1-top")) {
-        int a = 5;
-        a = 6;
-    }
     auto reply = _account->sendRawRequest(verb, url, req, requestBody);
     _requestBody = requestBody;
     if (_requestBody) {

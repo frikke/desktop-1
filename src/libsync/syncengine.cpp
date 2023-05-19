@@ -501,11 +501,9 @@ void SyncEngine::startSync()
     if (s_anySyncRunning || _syncRunning) {
         return;
     }
-
-    _journal->listAllTopLevelE2eeFolders([this](const SyncJournalFileRecord &record) {
-        if (record._e2eEncryptionStatus < SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0) {
-            _journal->schedulePathForRemoteDiscovery(record.path());
-        }
+    const auto currentEncryptionStatus = EncryptionStatusEnums::toDbEncryptionStatus(EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_account->capabilities().clientSideEncryptionVersion()));
+    [[maybe_unused]] const auto result = _journal->listAllE2eeFoldersWithEncryptionStatusLessThan(static_cast<int>(currentEncryptionStatus), [this](const SyncJournalFileRecord &record) {
+        _journal->schedulePathForRemoteDiscovery(record.path());
     });
 
     s_anySyncRunning = true;
@@ -863,7 +861,7 @@ void SyncEngine::slotDiscoveryFinished()
         if (_needsUpdate)
             Q_EMIT started();
         
-        _propagator->setTopLevelFolderMetadata(_discoveryPhase->_topLevelE2eeFoldersMetadata);
+        _propagator->setTopLevelFolderMetadata(_discoveryPhase->_rootE2eeFoldersMetadata);
         _propagator->start(std::move(_syncItems));
 
         qCInfo(lcEngine) << "#### Post-Reconcile end #################################################### " << _stopWatch.addLapTime(QStringLiteral("Post-Reconcile Finished")) << "ms";

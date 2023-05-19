@@ -205,14 +205,11 @@ void OCC::HydrationJob::slotCheckFolderEncryptedMetadata(const QJsonDocument &js
         emitFinished(Error);
         return;
     }
-    const auto topLevelFolderPath = rec.path() == _remoteParentPath ? QStringLiteral("/") : rec.path();
-    const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
+    const auto rootE2eeFolderPath = rec.path() == _remoteParentPath ? QStringLiteral("/") : rec.path();
+    const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, metadata, filename] {
-        if (metadata->isMetadataSetup()) {
-            const QVector<FolderMetadata::EncryptedFile> files = metadata->files();
-
-            FolderMetadata::EncryptedFile encryptedInfo = {};
-
+        if (metadata->isValid()) {
+            const auto files = metadata->files();
             const QString encryptedFileExactName = e2eMangledName().section(QLatin1Char('/'), -1);
             for (const FolderMetadata::EncryptedFile &file : files) {
                 if (encryptedFileExactName == file.encryptedFilename) {

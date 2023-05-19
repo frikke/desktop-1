@@ -15,6 +15,7 @@
 #pragma once
 
 #include "owncloudpropagator.h"
+#include "syncfileitem.h"
 
 #include <QScopedPointer>
 
@@ -24,12 +25,12 @@ namespace OCC {
 
 class FolderMetadata;
 
-class OWNCLOUDSYNC_EXPORT UpdateFileDropMetadataJob : public PropagatorJob
+class OWNCLOUDSYNC_EXPORT UpdateE2eeFolderMetadataJob : public PropagatorJob
 {
     Q_OBJECT
 
 public:
-    explicit UpdateFileDropMetadataJob(OwncloudPropagator *propagator, const QString &path);
+    explicit UpdateE2eeFolderMetadataJob(OwncloudPropagator *propagator, const SyncFileItemPtr &item, const QString &encryptedRemotePath);
 
     bool scheduleSelfOrChild() override;
 
@@ -46,15 +47,14 @@ private slots:
     void slotFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode);
     void slotUpdateMetadataSuccess(const QByteArray &fileId);
     void slotUpdateMetadataError(const QByteArray &fileId, int httpReturnCode);
-    void unlockFolder();
+    void unlockFolder(bool success);
 
 signals:
-    void folderUnlocked(const QByteArray &folderId, int httpStatus);
-
     void fileDropMetadataParsedAndAdjusted(const OCC::FolderMetadata *const metadata);
 
 private:
-    QString _path;
+    SyncFileItemPtr _item;
+    QString _encryptedRemotePath;
     bool _currentLockingInProgress = false;
 
     bool _isUnlockRunning = false;

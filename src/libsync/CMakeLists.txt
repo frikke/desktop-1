@@ -100,8 +100,8 @@ set(libsync_SRCS
     syncoptions.cpp
     theme.h
     theme.cpp
-    updatefiledropmetadata.h
-    updatefiledropmetadata.cpp
+    updatee2eefoldermetadatajob.h
+    updatee2eefoldermetadatajob.cpp
 	updatemigratede2eemetadatajob.h
 	updatemigratede2eemetadatajob.cpp
     updatee2eefolderusersmetadatajob.h

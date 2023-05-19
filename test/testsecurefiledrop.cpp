@@ -5,7 +5,7 @@
  *
  */
 
-#include "updatefiledropmetadata.h"
+#include "updatee2eefoldermetadatajob.h"
 #include "syncengine.h"
 #include "syncenginetestutils.h"
 #include "testhelper.h"
@@ -97,12 +97,24 @@ private slots:
                         const QString folderRemotePath = pathSplit.last() + QStringLiteral("/");
                         _parsedMetadataWithFileDrop.reset(new FolderMetadata(_fakeFolder.syncEngine().account(),
                                                                              jsonDoc.toJson(),
-                                                                             FolderMetadata::TopLevelFolderInitializationData(folderRemotePath)));
+                                                                             FolderMetadata::RootEncryptedFolderInfo(folderRemotePath)));
                         _parsedMetadataAfterProcessingFileDrop.reset(new FolderMetadata(_fakeFolder.syncEngine().account(),
                                                                                         jsonDoc.toJson(),
-                                                                                        FolderMetadata::TopLevelFolderInitializationData(folderRemotePath)));
-                        [[maybe_unused]] const auto result = _parsedMetadataAfterProcessingFileDrop->moveFromFileDropToFiles();
-                        reply = new FakePayloadReply(op, req, jsonDoc.toJson(), nullptr);
+                                                                                        FolderMetadata::RootEncryptedFolderInfo(folderRemotePath)));
+
+                        QSignalSpy parsedMetadataWithFileDropSetupSpy(_parsedMetadataWithFileDrop.data(), &FolderMetadata::setupComplete);
+                        parsedMetadataWithFileDropSetupSpy.wait(3000);
+
+                        QSignalSpy parsedMetadataAfterProcessingFileDropSetupSpy(_parsedMetadataAfterProcessingFileDrop.data(), &FolderMetadata::setupComplete);
+                        parsedMetadataAfterProcessingFileDropSetupSpy.wait(3000);
+
+                        if (!_parsedMetadataWithFileDrop->isValid() || !_parsedMetadataAfterProcessingFileDrop->isValid()) {
+                            qCritical() << "Could not setup metadata!";
+                            reply = new FakePayloadReply(op, req, {}, nullptr);
+                        } else {
+                            [[maybe_unused]] const auto result = _parsedMetadataAfterProcessingFileDrop->moveFromFileDropToFiles();
+                            reply = new FakePayloadReply(op, req, jsonDoc.toJson(), nullptr);
+                        }
                         ++_getMetadataCallsCount;
                     } else {
                         qCritical() << "Could not open fake JSON file!";
@@ -133,9 +145,10 @@ private slots:
 
     void testUpdateFileDropMetadata()
     {
-        const auto updateFileDropMetadataJob = new UpdateFileDropMetadataJob(_propagator.data(), fakeE2eeFolderPath);
+        SyncFileItemPtr dummyItem;
+        const auto updateFileDropMetadataJob = new UpdateE2eeFolderMetadataJob(_propagator.data(), dummyItem, fakeE2eeFolderPath);
         connect(updateFileDropMetadataJob,
-                &UpdateFileDropMetadataJob::fileDropMetadataParsedAndAdjusted,
+                &UpdateE2eeFolderMetadataJob::fileDropMetadataParsedAndAdjusted,
                 this,
                 [this, updateFileDropMetadataJob](const FolderMetadata *const metadata) {
                     if (!metadata || metadata->files().isEmpty() || metadata->fileDrop().isEmpty()) {
@@ -144,7 +157,7 @@ private slots:
 
                     emit fileDropMetadataParsedAndAdjusted();
 
-                    QSignalSpy updateFileDropMetadataJobSpy(updateFileDropMetadataJob, &UpdateFileDropMetadataJob::finished);
+                    QSignalSpy updateFileDropMetadataJobSpy(updateFileDropMetadataJob, &UpdateE2eeFolderMetadataJob::finished);
                     QSignalSpy fileDropMetadataParsedAndAdjustedSpy(this, &TestSecureFileDrop::fileDropMetadataParsedAndAdjusted);
 
                     QVERIFY(updateFileDropMetadataJob->scheduleSelfOrChild());

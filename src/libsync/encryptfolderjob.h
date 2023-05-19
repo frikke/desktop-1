@@ -36,7 +36,7 @@ public:
     [[nodiscard]] QString errorString() const;
 
 signals:
-    void finished(int status);
+    void finished(int status, EncryptionStatusEnums::ItemEncryptionStatus encryptionStatus);
 
 public slots:
     void setPathNonEncrypted(const QString &pathNonEncrypted);
@@ -60,5 +60,6 @@ private:
     QByteArray _fileId;
     QByteArray _folderToken;
     QString _errorString;
+    EncryptionStatusEnums::ItemEncryptionStatus _folderEncryptionStatus = EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted;
 };
 }

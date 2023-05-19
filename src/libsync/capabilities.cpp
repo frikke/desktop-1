@@ -167,20 +167,20 @@ bool Capabilities::clientSideEncryptionAvailable() const
     return capabilityAvailable;
 }
 
-QString Capabilities::clientSideEncryptionVersion() const
+double Capabilities::clientSideEncryptionVersion() const
 {
     const auto foundEndToEndEncryptionInCaps = _capabilities.constFind(QStringLiteral("end-to-end-encryption"));
     if (foundEndToEndEncryptionInCaps == _capabilities.constEnd()) {
-        return QStringLiteral("1.0");
+        return 1.0;
     }
 
     const auto properties = (*foundEndToEndEncryptionInCaps).toMap();
     const auto enabled = properties.value(QStringLiteral("enabled"), false).toBool();
     if (!enabled) {
-        return false;
+        return 0.0;
     }
 
-    return properties.value(QStringLiteral("api-version"), "1.0").toString();
+    return properties.value(QStringLiteral("api-version"), "1.0").toDouble();
 }
 
 bool Capabilities::notificationsAvailable() const

@@ -353,7 +353,7 @@ DiscoverySingleDirectoryJob::DiscoverySingleDirectoryJob(const AccountPtr &accou
     : QObject(parent)
     , _subPath(path)
     , _account(account)
-    , _listTopLevelE2eeFolders(listTopLevelE2eeFolders)
+    , _listRootE2eeFolders(listTopLevelE2eeFolders)
 {
 }
 
@@ -425,6 +425,16 @@ QSharedPointer<FolderMetadata> DiscoverySingleDirectoryJob::e2eeFolderMetadata()
 bool DiscoverySingleDirectoryJob::encryptedMetadataNeedUpdate() const
 {
     return _encryptedMetadataNeedUpdate;
+}
+
+SyncFileItem::EncryptionStatus DiscoverySingleDirectoryJob::currentEncryptionStatus() const
+{
+    return _encryptionStatusCurrent;
+}
+
+SyncFileItem::EncryptionStatus DiscoverySingleDirectoryJob::requiredEncryptionStatus() const
+{
+    return _encryptionStatusRequired;
 }
 
 static void propertyMapToRemoteInfo(const QMap<QString, QString> &map, RemoteInfo &result)
@@ -552,7 +562,7 @@ void DiscoverySingleDirectoryJob::directoryListingIteratedSlot(const QString &fi
             _fileId = map.value("id").toUtf8();
         }
         if (map.contains("is-encrypted") && map.value("is-encrypted") == QStringLiteral("1")) {
-            _encryptionStatus = SyncFileItem::EncryptionStatus::Encrypted;
+            _encryptionStatusCurrent = SyncFileItem::EncryptionStatus::Encrypted;
             Q_ASSERT(!_fileId.isEmpty());
         }
         if (map.contains("size")) {
@@ -645,7 +655,7 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
 
     QString topLevelFolderPath;
 
-    for (const QString &topLevelPath : _listTopLevelE2eeFolders) {
+    for (const QString &topLevelPath : _listRootE2eeFolders) {
         if (_subPath == topLevelPath) {
             topLevelFolderPath = QStringLiteral("/");
             break;
@@ -661,18 +671,17 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
         topLevelFolderPath = QStringLiteral("/");
     }
 
-    const auto requiredMetadataVersion = [this]() {
-        if (_encryptionStatus == SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2) {
-            return FolderMetadata::RequiredMetadataVersion::Version1_2;
-        } else {
-            return FolderMetadata::RequiredMetadataVersion::Version2_0;
-        }
-    }();
-
-    _e2EeFolderMetadata.reset(new FolderMetadata(_account, requiredMetadataVersion, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::TopLevelFolderInitializationData(topLevelFolderPath)));
+    _e2EeFolderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(topLevelFolderPath)));
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
+        if (!_e2EeFolderMetadata->isValid()) {
+            emit finished(HttpError{0, tr("Ebcrypted metadata setup error!")});
+            deleteLater();
+            return;
+        }
         _isFileDropDetected = _e2EeFolderMetadata->isFileDropPresent();
         _encryptedMetadataNeedUpdate = _e2EeFolderMetadata->encryptedMetadataNeedUpdate();
+        _encryptionStatusRequired = FolderMetadata::fromMedataVersionToItemEncryptionStatus(_e2EeFolderMetadata->latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion()));
+        _encryptionStatusCurrent = FolderMetadata::fromMedataVersionToItemEncryptionStatus(_e2EeFolderMetadata->existingMetadataVersion());
 
         const auto encryptedFiles = _e2EeFolderMetadata->files();
 

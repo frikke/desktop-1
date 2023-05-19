@@ -573,6 +573,7 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
     item->_directDownloadUrl = serverEntry.directDownloadUrl;
     item->_directDownloadCookies = serverEntry.directDownloadCookies;
     item->_e2eEncryptionStatus = serverEntry.isE2eEncrypted() ? SyncFileItem::EncryptionStatus::Encrypted : SyncFileItem::EncryptionStatus::NotEncrypted;
+    item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_discoveryData->_account->capabilities().clientSideEncryptionVersion());
     item->_encryptedFileName = [=] {
         if (serverEntry.e2eMangledName.isEmpty()) {
             return QString();
@@ -1891,18 +1892,18 @@ void ProcessDirectoryJob::chopVirtualFileSuffix(QString &str) const
 DiscoverySingleDirectoryJob *ProcessDirectoryJob::startAsyncServerQuery()
 {
     if (_dirItem && _dirItem->isEncrypted() && _dirItem->_encryptedFileName.isEmpty()) {
-        _discoveryData->_listTopLevelE2eeFolders.insert(QLatin1Char('/') + _dirItem->_file);
+        _discoveryData->_listRootE2eeFolders.insert(QLatin1Char('/') + _dirItem->_file);
     }
     auto serverJob = new DiscoverySingleDirectoryJob(_discoveryData->_account,
                                                      _discoveryData->_remoteFolder + _currentFolder._server,
-                                                     _discoveryData->_listTopLevelE2eeFolders,
+                                                     _discoveryData->_listRootE2eeFolders,
                                                      this);
     if (!_dirItem) {
         serverJob->setIsRootPath(); // query the fingerprint on the root
     } else if (_dirItem && _dirItem->isEncrypted() && !_dirItem->_encryptedFileName.isEmpty()) {
         const auto dirItemSplit = _dirItem->_file.split(QLatin1Char('/'), Qt::SkipEmptyParts);
-        const auto foundTopLevelE2eeFolderMetadata = _discoveryData->_topLevelE2eeFoldersMetadata.find(dirItemSplit.first() + QLatin1Char('/'));
-        if (foundTopLevelE2eeFolderMetadata != _discoveryData->_topLevelE2eeFoldersMetadata.end()) {
+        const auto foundTopLevelE2eeFolderMetadata = _discoveryData->_rootE2eeFoldersMetadata.find(dirItemSplit.first() + QLatin1Char('/'));
+        if (foundTopLevelE2eeFolderMetadata != _discoveryData->_rootE2eeFoldersMetadata.end()) {
             serverJob->setTopLevelE2eeFolderMetadata(foundTopLevelE2eeFolderMetadata.value());
         }
     }
@@ -1911,14 +1912,22 @@ DiscoverySingleDirectoryJob *ProcessDirectoryJob::startAsyncServerQuery()
     _pendingAsyncJobs++;
     connect(serverJob, &DiscoverySingleDirectoryJob::finished, this, [this, serverJob](const auto &results) {
         if (_dirItem) {
-            if (_dirItem->isEncrypted() && _dirItem->_encryptedFileName.isEmpty()) {
-                _discoveryData->_topLevelE2eeFoldersMetadata[_dirItem->_file + QLatin1Char('/')] = serverJob->e2eeFolderMetadata();
+            if (_dirItem->isEncrypted()) {
+                if (_dirItem->_encryptedFileName.isEmpty()) {
+                    _discoveryData->_rootE2eeFoldersMetadata[_dirItem->_file + QLatin1Char('/')] = serverJob->e2eeFolderMetadata();
+                }
+
+                _dirItem->_isFileDropDetected = serverJob->isFileDropDetected();
+
+                SyncJournalFileRecord record;
+                const auto alreadyDownloaded = _discoveryData->_statedb->getFileRecord(_dirItem->_file, &record) && record.isValid();
+                // we need to make sure we first download all e2ee files/folders before migrating
+                _dirItem->_isEncryptedMetadataNeedUpdate = alreadyDownloaded && serverJob->encryptedMetadataNeedUpdate();
+                _dirItem->_e2eEncryptionStatus = serverJob->currentEncryptionStatus();
+                _dirItem->_e2eEncryptionStatusRemote = serverJob->currentEncryptionStatus();
+                _dirItem->_e2eEncryptionMaximumAvailableStatus = serverJob->requiredEncryptionStatus();
+                _discoveryData->_anotherSyncNeeded = !alreadyDownloaded && serverJob->encryptedMetadataNeedUpdate();
             }
-            _dirItem->_isFileDropDetected = serverJob->isFileDropDetected();
-            SyncJournalFileRecord record;
-            const auto alreadySynced = _discoveryData->_statedb->getFileRecord(_dirItem->_file, &record) && record.isValid();
-            _dirItem->_isEncryptedMetadataNeedUpdate = serverJob->encryptedMetadataNeedUpdate() && alreadySynced;
-            _discoveryData->_anotherSyncNeeded = !alreadySynced && serverJob->encryptedMetadataNeedUpdate();
             qCInfo(lcDisco) << "serverJob has finished for folder:" << _dirItem->_file << " and it has _isFileDropDetected:" << true;
         }
         _discoveryData->_currentlyActiveJobs--;

@@ -77,6 +77,19 @@ JournalDbEncryptionStatus toDbEncryptionStatus(ItemEncryptionStatus encryptionSt
     return result;
 }
 
+ItemEncryptionStatus fromEndToEndEncryptionApiVersion(const double version)
+{
+    if (version >= 2.0) {
+        return ItemEncryptionStatus::EncryptedMigratedV2_0;
+    } else if (version >= 1.2) {
+        return ItemEncryptionStatus::EncryptedMigratedV1_2;
+    } else if (version >= 1.0) {
+        return ItemEncryptionStatus::Encrypted;
+    } else {
+        return ItemEncryptionStatus::NotEncrypted;
+    }
+}
+
 }
 
 SyncJournalFileRecord SyncFileItem::toSyncJournalFileRecordWithInode(const QString &localFileName) const
@@ -176,7 +189,7 @@ SyncFileItemPtr SyncFileItem::fromProperties(const QString &filePath, const QMap
     item->_isShared = item->_remotePerm.hasPermission(RemotePermissions::IsShared);
     item->_lastShareStateFetchedTimestamp = QDateTime::currentMSecsSinceEpoch();
 
-    item->_e2eEncryptionStatus = (properties.value(QStringLiteral("is-encrypted")) == QStringLiteral("1") ? SyncFileItem::EncryptionStatus::EncryptedMigratedV1_2 : SyncFileItem::EncryptionStatus::NotEncrypted);
+    item->_e2eEncryptionStatus = (properties.value(QStringLiteral("is-encrypted")) == QStringLiteral("1") ? SyncFileItem::EncryptionStatus::Encrypted : SyncFileItem::EncryptionStatus::NotEncrypted);
     item->_locked =
         properties.value(QStringLiteral("lock")) == QStringLiteral("1") ? SyncFileItem::LockStatus::LockedItem : SyncFileItem::LockStatus::UnlockedItem;
     item->_lockOwnerDisplayName = properties.value(QStringLiteral("lock-owner-displayname"));
