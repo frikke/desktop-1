@@ -141,6 +141,7 @@ bool Capabilities::clientSideEncryptionAvailable() const
     if (!enabled) {
         return false;
     }
+    auto versionDouble = properties.value(QStringLiteral("api-version"), 1.0).toDouble();
 
     const auto version = properties.value(QStringLiteral("api-version"), "1.0").toByteArray();
     const auto splittedVersion = version.split('.');
@@ -166,11 +167,11 @@ bool Capabilities::clientSideEncryptionAvailable() const
     return capabilityAvailable;
 }
 
-double Capabilities::clientSideEncryptionVersion() const
+QString Capabilities::clientSideEncryptionVersion() const
 {
     const auto foundEndToEndEncryptionInCaps = _capabilities.constFind(QStringLiteral("end-to-end-encryption"));
     if (foundEndToEndEncryptionInCaps == _capabilities.constEnd()) {
-        return 1.0;
+        return QStringLiteral("1.0");
     }
 
     const auto properties = (*foundEndToEndEncryptionInCaps).toMap();
@@ -179,7 +180,7 @@ double Capabilities::clientSideEncryptionVersion() const
         return false;
     }
 
-    return properties.value(QStringLiteral("api-version"), 1.0).toDouble();
+    return properties.value(QStringLiteral("api-version"), "1.0").toString();
 }
 
 bool Capabilities::notificationsAvailable() const

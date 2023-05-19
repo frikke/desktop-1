@@ -378,10 +378,12 @@ void FolderMetadata::setupVersionFromExistingMetadata(const QByteArray &metadata
     const auto metadataObj = metaDataDoc.object()[metadataJsonKey].toObject();
 
     if (metadataObj.contains(versionKey)) {
-        _versionFromMetadata = metadataObj[versionKey].toDouble();
+        _versionFromMetadata = metadataObj.value(versionKey).type() == QJsonValue::Type::String ? metadataObj[versionKey].toString()
+                                                                                                : QString::number(metadataObj[versionKey].toDouble(), 'g', 2);
     }
-    if (metaDataDoc.object().contains(versionKey)) {
-        _versionFromMetadata = metaDataDoc.object()[versionKey].toDouble();
+    else if (metaDataDoc.object().contains(versionKey)) {
+        _versionFromMetadata = metaDataDoc.object().value(versionKey).type() == QJsonValue::Type::String ? metaDataDoc.object()[versionKey].toString()
+            : QString::number(metaDataDoc.object()[versionKey].toDouble(), 'g', 2);
     }
 }
 
@@ -573,7 +575,7 @@ const QSet<QByteArray>& FolderMetadata::keyChecksums() const
     return _keyChecksums;
 }
 
-int FolderMetadata::versionFromMetadata() const
+QString FolderMetadata::versionFromMetadata() const
 {
     return _versionFromMetadata;
 }
@@ -647,7 +649,9 @@ QByteArray FolderMetadata::encryptedMetadata()
                                {nonceKey, QJsonValue::fromVariant(initializationVector.toBase64())},
                                {authenticationTagKey, QJsonValue::fromVariant(authenticationTag.toBase64())}};
 
-    QJsonObject metaObject = {{metadataJsonKey, metadata}, {versionKey, requiredMetadataVersionNumeric()}};
+    QJsonObject metaObject = {{metadataJsonKey, metadata}, {versionKey, _account->capabilities().clientSideEncryptionVersion()}};
+
+    auto map = metaObject.toVariantMap();
 
     QJsonArray folderUsers;
     if (isTopLevelFolder()) {
@@ -689,25 +693,13 @@ QByteArray FolderMetadata::encryptedMetadata()
 
 FolderMetadata::RequiredMetadataVersion FolderMetadata::metadataVersion() const
 {
-    if (_versionFromMetadata < 1.2f) {
-        return RequiredMetadataVersion::Version1;
-    } else if (_versionFromMetadata < 2.0f) {
+    if (_versionFromMetadata == QStringLiteral("1.2")) {
         return RequiredMetadataVersion::Version1_2;
+    } else if (_versionFromMetadata == QStringLiteral("2.0")) {
+        return RequiredMetadataVersion::Version2_0;
     }
-    return RequiredMetadataVersion::Version2_0;
-}
-
-double FolderMetadata::requiredMetadataVersionNumeric() const
-{
-    switch (_requiredMetadataVersion) {
-    case RequiredMetadataVersion::Version1:
-        return 1.0;
-    case RequiredMetadataVersion::Version1_2:
-        return 1.2;
-    case RequiredMetadataVersion::Version2_0:
-        return 2.0;
-    }
-    return 2.0f;
+  
+    return RequiredMetadataVersion::Version1;
 }
 
 bool FolderMetadata::isVersion2AndUp() const
@@ -977,7 +969,8 @@ void FolderMetadata::createNewMetadataKeyForEncryption()
 
 bool FolderMetadata::verifyMetadataKey(const QByteArray &metadataKey) const
 {
-    if (_versionFromMetadata < 2) {
+    const auto versionDouble = _versionFromMetadata.toDouble();
+    if (versionDouble < 2.0) {
         return true;
     }
     if (metadataKey.isEmpty() || metadataKey.size() < metadataKeySize ) {

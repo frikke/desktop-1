@@ -89,7 +89,7 @@ public:
     /// returns true if the server supports client side encryption
     [[nodiscard]] bool clientSideEncryptionAvailable() const;
 
-    [[nodiscard]] double clientSideEncryptionVersion() const;
+    [[nodiscard]] QString clientSideEncryptionVersion() const;
 
     /// returns true if the capabilities are loaded already.
     [[nodiscard]] bool isValid() const;

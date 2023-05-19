@@ -99,13 +99,11 @@ public:
 
     [[nodiscard]] const QByteArray metadataKeyForEncryption() const;
     const QSet<QByteArray> &keyChecksums() const;
-    int versionFromMetadata() const;
+    QString versionFromMetadata() const;
 
     QByteArray encryptedMetadata();
 
     [[nodiscard]] RequiredMetadataVersion metadataVersion() const;
-
-    [[nodiscard]] double requiredMetadataVersionNumeric() const;
 
     [[nodiscard]] bool isVersion2AndUp() const;
 
@@ -181,7 +179,7 @@ private:
     QByteArray _fileDropCipherTextEncryptedAndBase64;
     QByteArray _initialMetadata;
     QString _topLevelFolderPath;
-    float _versionFromMetadata = -1.0f;
+    QString _versionFromMetadata;
     QJsonObject _fileDrop;
     // used by unit tests, must get assigned simultaneously with _fileDrop and not erased
     QJsonObject _fileDropFromServer;
