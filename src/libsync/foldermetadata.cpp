@@ -378,7 +378,7 @@ void FolderMetadata::setupVersionFromExistingMetadata(const QByteArray &metadata
     else if (metaDataDoc.object().contains(versionKey)) {
         const auto metadataVersionValue = metaDataDoc.object()[versionKey].toVariant();
         if (metadataVersionValue.type() == QVariant::Type::String) {
-            versionStringFromMetadata = metadataObj[versionKey].toString();
+            versionStringFromMetadata = metadataVersionValue.toString();
         } else if (metadataVersionValue.type() == QVariant::Type::Double) {
             versionStringFromMetadata = QString::number(metadataVersionValue.toDouble(), 'g', 2);
         } else if (metadataVersionValue.type() == QVariant::Type::Int) {
@@ -388,7 +388,7 @@ void FolderMetadata::setupVersionFromExistingMetadata(const QByteArray &metadata
 
     if (versionStringFromMetadata == QStringLiteral("1.2")) {
         _existingMetadataVersion = MetadataVersion::Version1_2;
-    } else if (versionStringFromMetadata == QStringLiteral("2.0")) {
+    } else if (versionStringFromMetadata == QStringLiteral("2.0") || versionStringFromMetadata == QStringLiteral("2")) {
         _existingMetadataVersion = MetadataVersion::Version2_0;
     } else if (versionStringFromMetadata == QStringLiteral("1.0") || versionStringFromMetadata == QStringLiteral("1")) {
         _existingMetadataVersion = MetadataVersion::Version1;
@@ -523,6 +523,8 @@ void FolderMetadata::setupEmptyMetadata()
         addUser(_account->davUser(), _account->e2e()->_certificate);
         _metadataKeyForDecryption = _metadataKeyForEncryption;
     }
+    _isMetadataValid = true;
+
     emitSetupComplete();
 }
 

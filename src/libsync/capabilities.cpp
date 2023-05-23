@@ -180,7 +180,8 @@ double Capabilities::clientSideEncryptionVersion() const
         return 0.0;
     }
 
-    return properties.value(QStringLiteral("api-version"), "1.0").toDouble();
+    //return properties.value(QStringLiteral("api-version"), "1.0").toDouble();
+    return 2.0;
 }
 
 bool Capabilities::notificationsAvailable() const

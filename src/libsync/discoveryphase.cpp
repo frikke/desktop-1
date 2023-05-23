@@ -674,7 +674,7 @@ void DiscoverySingleDirectoryJob::metadataReceived(const QJsonDocument &json, in
     _e2EeFolderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(topLevelFolderPath)));
     connect(_e2EeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         if (!_e2EeFolderMetadata->isValid()) {
-            emit finished(HttpError{0, tr("Ebcrypted metadata setup error!")});
+            emit finished(HttpError{0, tr("Encrypted metadata setup error!")});
             deleteLater();
             return;
         }
