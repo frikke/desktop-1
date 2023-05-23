@@ -96,9 +96,16 @@ void NavigationPaneHelper::updateCloudStorageRegistry()
                 QString namespacePath = QString() % R"(Software\Microsoft\Windows\CurrentVersion\Explorer\Desktop\NameSpace\)" % clsidStr;
 
                 QString title = folder->shortGuiRemotePathOrAppName();
+                qCInfo(lcNavPane) << "title is:" << title << "account displayName is:" << folder->accountState()->account()->displayName();
                 // Write the account name in the sidebar only when using more than one account.
-                if (AccountManager::instance()->accounts().size() > 1)
+                if (AccountManager::instance()->accounts().size() > 1) {
                     title = title % " - " % folder->accountState()->account()->displayName();
+                    qCInfo(lcNavPane) << "AccountManager::instance()->accounts().size() is > 1, so setting title to:" << title;
+                } else {
+                    qCInfo(lcNavPane) << "AccountManager::instance()->accounts().size() is < 1, so keeping title as:" << title;
+                    title = title % " - " % folder->accountState()->account()->displayName();
+                    qCInfo(lcNavPane) << "Since this is a custom build, setting title to:" << title;
+                }
                 QString iconPath = QDir::toNativeSeparators(qApp->applicationFilePath());
                 QString targetFolderPath = QDir::toNativeSeparators(folder->cleanPath());
 

@@ -247,6 +247,7 @@ QVariant Utility::registryGetKeyValue(HKEY hRootKey, const QString &subKey, cons
 
 bool Utility::registrySetKeyValue(HKEY hRootKey, const QString &subKey, const QString &valueName, DWORD type, const QVariant &value)
 {
+    qCInfo(lcUtility) << "Registry setting hRootKey:" << hRootKey << "for subKey:" << subKey << "for valueName:" << valueName << "to value:" << value;
     HKEY hKey;
     // KEY_WOW64_64KEY is necessary because CLSIDs are "Redirected and reflected only for CLSIDs that do not specify InprocServer32 or InprocHandler32."
     // https://msdn.microsoft.com/en-us/library/windows/desktop/aa384253%28v=vs.85%29.aspx#redirected__shared__and_reflected_keys_under_wow64
