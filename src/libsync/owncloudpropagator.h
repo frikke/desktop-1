@@ -697,8 +697,6 @@ private:
     QMap<QString, QSharedPointer<FolderMetadata>> _topLevelFolderMetadata;
 
     static bool _allowDelayedUpload;
-
-    QSet<QString> _appendedMigrationJobPaths;
 };
 
 

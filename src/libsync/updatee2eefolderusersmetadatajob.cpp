@@ -133,6 +133,11 @@ void UpdateE2eeFolderUsersMetadataJob::setKeyChecksums(const QSet<QByteArray> &k
     _keyChecksums = keyChecksums;
 }
 
+void UpdateE2eeFolderUsersMetadataJob::setJubJobItems(const QHash<QString, SyncFileItemPtr> subJobItems)
+{
+    _subJobItems = subJobItems;
+}
+
 void UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain(const QSslCertificate certificate)
 {
     disconnect(_account->e2e(), &ClientSideEncryption::certificateFetchedFromKeychain, this, &UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain);
@@ -272,7 +277,6 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
             subJob->setParent(this);
             subJob->setFolderToken(_folderToken);
             _subJobs.insert(subJob);
-            _pathsForDbRecordsToUpdate.push_back(record._path);
             connect(subJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, &UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished);
         }
     });
@@ -308,15 +312,6 @@ void UpdateE2eeFolderUsersMetadataJob::slotUnlockFolder()
         qCDebug(lcUpdateE2eeFolderUsersMetadataJob) << "Successfully Unlocked";
         _folderToken.clear();
         _folderId.clear();
-
-        for (const auto &recordPath : _pathsForDbRecordsToUpdate) {
-            SyncJournalFileRecord rec;
-            [[maybe_unused]] const auto resultGet = _journalDb->getFileRecord(recordPath, &rec);
-            rec._e2eEncryptionStatus = EncryptionStatusEnums::toDbEncryptionStatus(
-                FolderMetadata::fromMedataVersionToItemEncryptionStatus(_folderMetadata->encryptedMetadataVersion()));
-            [[maybe_unused]] const auto resultSet = _journalDb->setFileRecord(rec);
-        }
-
         slotFolderUnlocked(folderId, 200);
     });
     connect(unlockJob, &UnlockEncryptFolderApiJob::error, [this](const QByteArray &folderId, int httpStatus) {
@@ -399,6 +394,14 @@ void UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished(int code, const QStrin
         slotUnlockFolder();
         return;
     }
+
+    const auto foundInHash = _subJobItems.constFind(job->path());
+
+    if (foundInHash != _subJobItems.end()) {
+        foundInHash.value()->_e2eEncryptionStatus = job->encryptionStatus();
+        foundInHash.value()->_e2eEncryptionStatusRemote = job->encryptionStatus();
+    }
+
     _subJobs.remove(job);
     job->deleteLater();
 

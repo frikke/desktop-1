@@ -35,11 +35,14 @@ public:
 
     [[nodiscard]] QString path() const;
 
+    void addSubJobItem(const QString &key, const SyncFileItemPtr &syncFileItem);
+
 private slots:
     void start();
 
 private:
     SyncFileItemPtr _item;
+    QHash<QString, SyncFileItemPtr> _subJobItems;
     QString _path;
     QString _folderRemotePath;
 };

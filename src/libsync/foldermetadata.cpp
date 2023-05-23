@@ -606,7 +606,7 @@ QByteArray FolderMetadata::encryptedMetadata()
 
     QByteArray authenticationTag;
     const auto initializationVector = EncryptionHelper::generateRandom(metadataKeySize);
-    const auto encryptedCipherText = EncryptionHelper::gZipThenEncryptData(metadataKeyForEncryption(), cipherTextDoc.toJson(QJsonDocument::Compact).toBase64(), initializationVector, authenticationTag).toBase64();
+    const auto encryptedCipherText = EncryptionHelper::gZipThenEncryptData(metadataKeyForEncryption(), cipherTextDoc.toJson(QJsonDocument::Compact), initializationVector, authenticationTag).toBase64();
     const QJsonObject metadata{{cipherTextKey, QJsonValue::fromVariant(encryptedCipherText)},
                                {nonceKey, QJsonValue::fromVariant(initializationVector.toBase64())},
                                {authenticationTagKey, QJsonValue::fromVariant(authenticationTag.toBase64())}};

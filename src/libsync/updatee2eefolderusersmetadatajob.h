@@ -56,6 +56,8 @@ public slots:
     void setMetadataKeyForDecryption(const QByteArray &metadataKey);
     void setKeyChecksums(const QSet<QByteArray> &keyChecksums);
 
+    void setJubJobItems(const QHash<QString, SyncFileItemPtr> subJobItems);
+
 private slots:
     void slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results);
     void slotCertificateFetchedFromKeychain(const QSslCertificate certificate);
@@ -98,6 +100,7 @@ private:
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
     QVariant _userData;
     QStringList _pathsForDbRecordsToUpdate;
+    QHash<QString, SyncFileItemPtr> _subJobItems;
 };
 
 }

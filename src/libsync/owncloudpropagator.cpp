@@ -491,8 +491,6 @@ void OwncloudPropagator::start(SyncFileItemVector &&items)
 {
     Q_ASSERT(std::is_sorted(items.begin(), items.end()));
 
-    _appendedMigrationJobPaths.clear();
-
     _abortRequested = false;
 
     /* This builds all the jobs needed for the propagation.
@@ -648,7 +646,6 @@ void OwncloudPropagator::startDirectoryPropagation(const SyncFileItemPtr &item,
             }
         }
     } else {
-        // we do not append directoryPropagationJob if it is a nested folder in encrypted folder and needs metadata update
         const auto currentDirJob = directories.top().second;
         currentDirJob->appendJob(directoryPropagationJob.get());
     }
@@ -694,26 +691,45 @@ void OwncloudPropagator::processE2eeMetadataMigration(const SyncFileItemPtr &ite
     if (item->_e2eEncryptionMaximumAvailableStatus >= EncryptionStatusEnums::ItemEncryptionStatus::EncryptedMigratedV2_0) {
         // migrating to v2.0+
         const auto rootE2eeFolderPath = item->_file.split('/').first();
-        const auto rootE2eeFolderPathFullRemotePath = fullRemotePath(rootE2eeFolderPath);
-        auto isJobAlreadyAppended = false;
+        const auto rootE2eeFolderPathWithSlash = QString(rootE2eeFolderPath + "/");
 
-        for (const auto &alreadyAppendedFullRemotePath : _appendedMigrationJobPaths) {
-            if (alreadyAppendedFullRemotePath == rootE2eeFolderPathFullRemotePath) {
-                isJobAlreadyAppended = true;
+        QPair<QString, PropagateDirectory *> foundDirectory = {QString{}, nullptr};
+        for (auto it = std::rbegin(directories); it != std::rend(directories); ++it) {
+            if (it->first == rootE2eeFolderPathWithSlash) {
+                foundDirectory = *it;
                 break;
             }
         }
-        if (!isJobAlreadyAppended) {
-            // we will need to update topLevelitem encryption status so it gets written to database
-            SyncFileItemPtr topLevelitem = item;
-            for (const auto &directory : directories) {
-                if (directory.first == QString(rootE2eeFolderPath + "/")) {
-                    topLevelitem = directory.second->_item;
+
+        UpdateMigratedE2eeMetadataJob *existingUpdateJob = nullptr;
+
+        SyncFileItemPtr topLevelitem = item;
+        if (foundDirectory.second) {
+            topLevelitem = foundDirectory.second->_item;
+            if (!foundDirectory.second->_subJobs._jobsToDo.isEmpty()) {
+                for (const auto jobToDo : foundDirectory.second->_subJobs._jobsToDo) {
+                    if (const auto foundExistingUpdateMigratedE2eeMetadataJob = qobject_cast<UpdateMigratedE2eeMetadataJob *>(jobToDo)) {
+                        existingUpdateJob = foundExistingUpdateMigratedE2eeMetadataJob;
+                        break;
+                    }
                 }
             }
-            _appendedMigrationJobPaths.insert(rootE2eeFolderPathFullRemotePath);
+        }
+
+        if (!existingUpdateJob) {
+            // we will need to update topLevelitem encryption status so it gets written to database
             const auto currentDirJob = directories.top().second;
-            currentDirJob->appendJob(new UpdateMigratedE2eeMetadataJob(this, topLevelitem, rootE2eeFolderPathFullRemotePath, remotePath()));
+            const auto rootE2eeFolderPathFullRemotePath = fullRemotePath(rootE2eeFolderPath);
+            const auto updateMetadataJob = new UpdateMigratedE2eeMetadataJob(this, topLevelitem, rootE2eeFolderPathFullRemotePath, remotePath());
+            if (item != topLevelitem) {
+                updateMetadataJob->addSubJobItem(item->_encryptedFileName, item);
+            }
+            currentDirJob->appendJob(updateMetadataJob);
+        } else {
+            if (item != topLevelitem) {
+                // simply append subJob item so we can set its encryption status when corresponging subjob finishes
+                existingUpdateJob->addSubJobItem(item->_encryptedFileName, item);
+            }
         }
     } else {
         // migrating to v1.2
