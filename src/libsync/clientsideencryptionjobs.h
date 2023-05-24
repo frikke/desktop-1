@@ -205,6 +205,7 @@ public:
     explicit StoreMetaDataApiJob (
         const AccountPtr &account,
         const QByteArray& fileId,
+        const QByteArray &token,
         const QByteArray& b64Metadata,
         QObject *parent = nullptr);
 
@@ -220,6 +221,7 @@ signals:
 
 private:
     QByteArray _fileId;
+    QByteArray _token;
     QByteArray _b64Metadata;
 };
 
@@ -281,6 +283,7 @@ public:
     explicit DeleteMetadataApiJob (
         const AccountPtr &account,
         const QByteArray& fileId,
+        const QByteArray& token,
         QObject *parent = nullptr);
 
 public slots:
@@ -295,6 +298,7 @@ signals:
 
 private:
     QByteArray _fileId;
+    QByteArray _token;
 };
 
 }

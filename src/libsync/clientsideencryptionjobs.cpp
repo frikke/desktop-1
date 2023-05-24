@@ -64,9 +64,13 @@ bool GetMetadataApiJob::finished()
 
 StoreMetaDataApiJob::StoreMetaDataApiJob(const AccountPtr& account,
                                                  const QByteArray& fileId,
+                                                 const QByteArray &token,
                                                  const QByteArray& b64Metadata,
                                                  QObject* parent)
-: AbstractNetworkJob(account, e2eeBaseUrl() + QStringLiteral("meta-data/") + fileId, parent), _fileId(fileId), _b64Metadata(b64Metadata)
+: AbstractNetworkJob(account, e2eeBaseUrl() + QStringLiteral("meta-data/") + fileId, parent),
+_fileId(fileId),
+_b64Metadata(b64Metadata),
+_token(token)
 {
 }
 
@@ -75,6 +79,7 @@ void StoreMetaDataApiJob::start()
     QNetworkRequest req;
     req.setRawHeader("OCS-APIREQUEST", "true");
     req.setHeader(QNetworkRequest::ContentTypeHeader, QByteArrayLiteral("application/x-www-form-urlencoded"));
+    req.setRawHeader(QByteArrayLiteral("e2e-token"), _token);
     QUrlQuery query;
     query.addQueryItem(QLatin1String("format"), QLatin1String("json"));
     QUrl url = Utility::concatUrlPath(account()->url(), path());
@@ -119,17 +124,16 @@ void UpdateMetadataApiJob::start()
     QNetworkRequest req;
     req.setRawHeader("OCS-APIREQUEST", "true");
     req.setHeader(QNetworkRequest::ContentTypeHeader, QByteArrayLiteral("application/x-www-form-urlencoded"));
+    req.setRawHeader(QByteArrayLiteral("e2e-token"), _token);
 
     QUrlQuery urlQuery;
     urlQuery.addQueryItem(QStringLiteral("format"), QStringLiteral("json"));
-    urlQuery.addQueryItem(QStringLiteral("e2e-token"), _token);
 
     QUrl url = Utility::concatUrlPath(account()->url(), path());
     url.setQuery(urlQuery);
 
     QUrlQuery params;
     params.addQueryItem("metaData",QUrl::toPercentEncoding(_b64Metadata));
-    params.addQueryItem("e2e-token", _token);
 
     QByteArray data = params.query().toLocal8Bit();
     auto buffer = new QBuffer(this);
@@ -204,10 +208,10 @@ bool UnlockEncryptFolderApiJob::finished()
 }
 
 
-DeleteMetadataApiJob::DeleteMetadataApiJob(const AccountPtr& account,
-                                                  const QByteArray& fileId,
-                                                 QObject* parent)
-: AbstractNetworkJob(account, e2eeBaseUrl() + QStringLiteral("meta-data/") + fileId, parent), _fileId(fileId)
+DeleteMetadataApiJob::DeleteMetadataApiJob(const AccountPtr& account, const QByteArray& fileId, const QByteArray &token, QObject* parent)
+: AbstractNetworkJob(account, e2eeBaseUrl() + QStringLiteral("meta-data/") + fileId, parent), 
+_fileId(fileId),
+_token(token)
 {
 }
 
@@ -215,6 +219,7 @@ void DeleteMetadataApiJob::start()
 {
     QNetworkRequest req;
     req.setRawHeader("OCS-APIREQUEST", "true");
+    req.setRawHeader(QByteArrayLiteral("e2e-token"), _token);
 
     QUrl url = Utility::concatUrlPath(account()->url(), path());
     sendRequest("DELETE", url, req);
