@@ -153,6 +153,7 @@ SyncFileItemPtr SyncFileItem::fromSyncJournalFileRecord(const SyncJournalFileRec
     item->_checksumHeader = rec._checksumHeader;
     item->_encryptedFileName = rec.e2eMangledName();
     item->_e2eEncryptionStatus = EncryptionStatusEnums::fromDbEncryptionStatus(rec._e2eEncryptionStatus);
+    item->_e2eEncryptionMaximumAvailableStatus = item->_e2eEncryptionStatus;
     item->_locked = rec._lockstate._locked ? LockStatus::LockedItem : LockStatus::UnlockedItem;
     item->_lockOwnerDisplayName = rec._lockstate._lockOwnerDisplayName;
     item->_lockOwnerId = rec._lockstate._lockOwnerId;
@@ -190,6 +191,9 @@ SyncFileItemPtr SyncFileItem::fromProperties(const QString &filePath, const QMap
     item->_lastShareStateFetchedTimestamp = QDateTime::currentMSecsSinceEpoch();
 
     item->_e2eEncryptionStatus = (properties.value(QStringLiteral("is-encrypted")) == QStringLiteral("1") ? SyncFileItem::EncryptionStatus::Encrypted : SyncFileItem::EncryptionStatus::NotEncrypted);
+    if (item->isEncrypted()) {
+        item->_e2eEncryptionMaximumAvailableStatus = item->_e2eEncryptionStatus;
+    }
     item->_locked =
         properties.value(QStringLiteral("lock")) == QStringLiteral("1") ? SyncFileItem::LockStatus::LockedItem : SyncFileItem::LockStatus::UnlockedItem;
     item->_lockOwnerDisplayName = properties.value(QStringLiteral("lock-owner-displayname"));

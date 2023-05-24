@@ -24,12 +24,15 @@ namespace OCC {
 
 Q_LOGGING_CATEGORY(lcEncryptFolderJob, "nextcloud.sync.propagator.encryptfolder", QtInfoMsg)
 
-EncryptFolderJob::EncryptFolderJob(const AccountPtr &account, SyncJournalDb *journal, const QString &path, const QByteArray &fileId, QObject *parent)
+EncryptFolderJob::EncryptFolderJob(const AccountPtr &account, SyncJournalDb *journal, const QString &path, const QByteArray &fileId, OwncloudPropagator *propagator, SyncFileItemPtr item,
+    QObject * parent)
     : QObject(parent)
     , _account(account)
     , _journal(journal)
     , _path(path)
     , _fileId(fileId)
+    , _propagator(propagator)
+    , _item(item)
 {
 }
 
@@ -59,18 +62,29 @@ void EncryptFolderJob::setPathNonEncrypted(const QString &pathNonEncrypted)
 void EncryptFolderJob::slotEncryptionFlagSuccess(const QByteArray &fileId)
 {
     SyncJournalFileRecord rec;
-    if (!_journal->getFileRecord(_path, &rec)) {
-        qCWarning(lcEncryptFolderJob) << "could not get file from local DB" << _path;
+    const auto currentPath = !_pathNonEncrypted.isEmpty() ? _pathNonEncrypted : _path;
+    if (!_journal->getFileRecord(currentPath, &rec)) {
+        qCWarning(lcEncryptFolderJob) << "could not get file from local DB" << currentPath;
     }
 
     if (!rec.isValid()) {
-        qCWarning(lcEncryptFolderJob) << "No valid record found in local DB for fileId" << fileId;
+        if (_propagator && _item) {
+            qCWarning(lcEncryptFolderJob) << "No valid record found in local DB for fileId" << fileId << "going to create it now...";
+            const auto updateResult = _propagator->updateMetadata(*_item.data());
+            if (updateResult) {
+                [[maybe_unused]] const auto result = _journal->getFileRecord(currentPath, &rec);
+            }
+        } else {
+            qCWarning(lcEncryptFolderJob) << "No valid record found in local DB for fileId" << fileId;
+        }
     }
 
-    rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::Encrypted;
-    const auto result = _journal->setFileRecord(rec);
-    if (!result) {
-        qCWarning(lcEncryptFolderJob) << "Error when setting the file record to the database" << rec._path << result.error();
+    if (!rec.isE2eEncrypted()) {
+        rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::Encrypted;
+        const auto result = _journal->setFileRecord(rec);
+        if (!result) {
+            qCWarning(lcEncryptFolderJob) << "Error when setting the file record to the database" << rec._path << result.error();
+        }
     }
 
     const auto lockJob = new LockEncryptFolderApiJob(_account, fileId, _journal, _account->e2e()->_publicKey, this);

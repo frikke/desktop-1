@@ -573,7 +573,9 @@ void ProcessDirectoryJob::processFileAnalyzeRemoteInfo(
     item->_directDownloadUrl = serverEntry.directDownloadUrl;
     item->_directDownloadCookies = serverEntry.directDownloadCookies;
     item->_e2eEncryptionStatus = serverEntry.isE2eEncrypted() ? SyncFileItem::EncryptionStatus::Encrypted : SyncFileItem::EncryptionStatus::NotEncrypted;
-    item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_discoveryData->_account->capabilities().clientSideEncryptionVersion());
+    if (serverEntry.isE2eEncrypted()) {
+        item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_discoveryData->_account->capabilities().clientSideEncryptionVersion());
+    }
     item->_encryptedFileName = [=] {
         if (serverEntry.e2eMangledName.isEmpty()) {
             return QString();
@@ -985,6 +987,9 @@ void ProcessDirectoryJob::processFileAnalyzeLocalInfo(
 
         if (dbEntry.isValid() && item->isDirectory()) {
             item->_e2eEncryptionStatus = EncryptionStatusEnums::fromDbEncryptionStatus(dbEntry._e2eEncryptionStatus);
+            if (item->isEncrypted()) {
+                item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_discoveryData->_account->capabilities().clientSideEncryptionVersion());
+            }
         }
 
         auto recurseQueryLocal = _queryLocal == ParentNotChanged ? ParentNotChanged : localEntry.isDirectory || item->_instruction == CSYNC_INSTRUCTION_RENAME ? NormalQuery : ParentDontExist;
@@ -1344,6 +1349,7 @@ void ProcessDirectoryJob::processFileAnalyzeLocalInfo(
             // renaming the encrypted folder is done via remove + re-upload hence we need to mark the newly created folder as encrypted
             // base is a record in the SyncJournal database that contains the data about the being-renamed folder with it's old name and encryption information
             item->_e2eEncryptionStatus = EncryptionStatusEnums::fromDbEncryptionStatus(base._e2eEncryptionStatus);
+            item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_discoveryData->_account->capabilities().clientSideEncryptionVersion());
         }
         postProcessLocalNew();
         finalize();

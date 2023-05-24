@@ -399,6 +399,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished(int code, const QStrin
         if (foundInHash != _subJobItems.constEnd() && foundInHash.value()) {
             foundInHash.value()->_e2eEncryptionStatus = job->encryptionStatus();
             foundInHash.value()->_e2eEncryptionStatusRemote = job->encryptionStatus();
+            foundInHash.value()->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_account->capabilities().clientSideEncryptionVersion());
             _subJobItems.erase(foundInHash);
         }
     }

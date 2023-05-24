@@ -203,6 +203,9 @@ void UpdateE2eeFolderMetadataJob::unlockFolder(bool success)
     if (!_isFolderLocked) {
         if (success) {
             _item->_e2eEncryptionStatus = _metadata->encryptedMetadataEncryptionStatus();
+            if (_item->isEncrypted()) {
+                _item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(propagator()->account()->capabilities().clientSideEncryptionVersion());
+            }
         }
         finished(itemStatus);
         return;

@@ -485,17 +485,18 @@ void SyncEngine::startSync()
             return;
         }
 
-        /*const auto e2EeLockedFolders = _journal->e2EeLockedFolders();
+        const auto e2EeLockedFolders = _journal->e2EeLockedFolders();
 
         if (!e2EeLockedFolders.isEmpty()) {
             for (const auto &e2EeLockedFolder : e2EeLockedFolders) {
                 const auto folderId = e2EeLockedFolder.first;
                 qCInfo(lcEngine()) << "start unlock job for folderId:" << folderId;
                 const auto folderToken = EncryptionHelper::decryptStringAsymmetric(_account->e2e()->_privateKey, e2EeLockedFolder.second);
+                // TODO: We need to rollback changes done to metadata in case we have an active lock, this needs to be implemented on the server first
                 const auto unlockJob = new OCC::UnlockEncryptFolderApiJob(_account, folderId, folderToken, _journal, this);
                 unlockJob->start();
             }
-        }*/
+        }
     }
 
     if (s_anySyncRunning || _syncRunning) {

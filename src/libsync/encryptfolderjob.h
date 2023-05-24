@@ -13,9 +13,11 @@
  */
 #pragma once
 
-#include <QObject>
-
 #include "account.h"
+#include "syncfileitem.h"
+#include "owncloudpropagator.h"
+
+#include <QObject>
 
 namespace OCC {
 class SyncJournalDb;
@@ -30,7 +32,13 @@ public:
     };
     Q_ENUM(Status)
 
-    explicit EncryptFolderJob(const AccountPtr &account, SyncJournalDb *journal, const QString &path, const QByteArray &fileId, QObject *parent = nullptr);
+    explicit EncryptFolderJob(const AccountPtr &account,
+                              SyncJournalDb *journal,
+                              const QString &path,
+                              const QByteArray &fileId,
+                              OwncloudPropagator *propagator = nullptr,
+                              SyncFileItemPtr item = {},
+                              QObject *parent = nullptr);
     void start();
 
     [[nodiscard]] QString errorString() const;
@@ -60,6 +68,8 @@ private:
     QByteArray _fileId;
     QByteArray _folderToken;
     QString _errorString;
+    OwncloudPropagator *_propagator = nullptr;
+    SyncFileItemPtr _item;
     EncryptionStatusEnums::ItemEncryptionStatus _folderEncryptionStatus = EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted;
 };
 }
