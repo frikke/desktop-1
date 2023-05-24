@@ -154,6 +154,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotCertificateFetchedFromKeychain(const 
 void UpdateE2eeFolderUsersMetadataJob::slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results)
 {
     const auto certificate = results.isEmpty() ? QSslCertificate{} : results.value(_folderUserId);
+    _folderUserCertificate = certificate;
     if (certificate.isNull()) {
         emit certificateReady();
         return;
@@ -271,7 +272,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
             const auto subJob = new UpdateE2eeFolderUsersMetadataJob(_account, _journalDb, _syncFolderRemotePath, UpdateE2eeFolderUsersMetadataJob::ReEncrypt, QString::fromUtf8(record._e2eMangledName));
             subJob->setMetadataKeyForEncryption(_folderMetadata->metadataKeyForEncryption());
             subJob->setMetadataKeyForDecryption(_folderMetadata->metadataKeyForDecryption());
-            subJob->setKeyChecksums(_folderMetadata->keyChecksums());
+            subJob->setKeyChecksums(_folderMetadata->keyChecksums() + _folderMetadata->keyChecksumsRemoved());
             subJob->setParent(this);
             subJob->setFolderToken(_folderToken);
             _subJobs.insert(subJob);
@@ -282,7 +283,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotScheduleSubJobs()
 
 void UpdateE2eeFolderUsersMetadataJob::slotLockFolder()
 {
-    Q_ASSERT(_operation == Operation::Add || _operation == Operation::ReEncrypt);
+    Q_ASSERT(_operation == Operation::Add || _operation == Operation::Remove);
     if (_operation != Operation::Add && _operation != Operation::Remove) {
         emit finished(-1);
         return;
@@ -395,8 +396,7 @@ void UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished(int code, const QStrin
     {
         QMutexLocker locker(&_subjobItemsMutex);
         const auto foundInHash = _subJobItems.constFind(job->path());
-
-        if (foundInHash != _subJobItems.end()) {
+        if (foundInHash != _subJobItems.constEnd() && foundInHash.value()) {
             foundInHash.value()->_e2eEncryptionStatus = job->encryptionStatus();
             foundInHash.value()->_e2eEncryptionStatusRemote = job->encryptionStatus();
             _subJobItems.erase(foundInHash);

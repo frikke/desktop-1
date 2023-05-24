@@ -99,13 +99,14 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
         emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
         return;
     }
-    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(
+    QSharedPointer<FolderMetadata> emptyMetadata(
+        new FolderMetadata(
         _account,
         {},
         FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), currentPath)))
     );
-    connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, token, metadata] {
-        const auto encryptedMetadata = metadata->encryptedMetadata();
+    connect(emptyMetadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, token, emptyMetadata] {
+        const auto encryptedMetadata = emptyMetadata->encryptedMetadata();
         if (encryptedMetadata.isEmpty()) {
             // TODO: Mark the folder as unencrypted as the metadata generation failed.
             _errorString =
@@ -115,7 +116,7 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
             return;
         }
 
-        _folderEncryptionStatus = metadata->encryptedMetadataEncryptionStatus();
+        _folderEncryptionStatus = emptyMetadata->encryptedMetadataEncryptionStatus();
 
         const auto storeMetadataJob = new StoreMetaDataApiJob(_account, fileId, token, encryptedMetadata, this);
         connect(storeMetadataJob, &StoreMetaDataApiJob::success, this, &EncryptFolderJob::slotUploadMetadataSuccess);

@@ -108,7 +108,7 @@ private:
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
     UserData _userData;
-    QHash<QString, SyncFileItemPtr> _subJobItems;
+    QHash<QString, SyncFileItemPtr> _subJobItems; //used when migrating to update corresponding SyncFileItem(s) for nested folders, such that records in db will get updated when propagate item job is finalized
     QMutex _subjobItemsMutex;
 };
 

@@ -82,7 +82,7 @@ bool FolderMetadata::RootEncryptedFolderInfo::keysSet() const
 
 FolderMetadata::FolderMetadata(AccountPtr account)
     : _account(account),
-    _isRootEncryptedFolder(true)
+    _isRootEncryptedFolder(false)
 {
     qCInfo(lcCseMetadata()) << "Setting up an Empty Metadata";
     initEmptyMetadata();
@@ -469,7 +469,7 @@ QByteArray FolderMetadata::computeMetadataKeyChecksum(const QByteArray &metadata
 
 bool FolderMetadata::isValid() const
 {
-    return !metadataKeyForDecryption().isEmpty() || !_metadataKeys.isEmpty();
+    return _isMetadataValid;
 }
 
 FolderMetadata::EncryptedFile FolderMetadata::parseEncryptedFileFromJson(const QString &encryptedFilename, const QJsonValue &fileJSON) const
@@ -516,6 +516,11 @@ const QByteArray FolderMetadata::metadataKeyForEncryption() const
 const QSet<QByteArray>& FolderMetadata::keyChecksums() const
 {
     return _keyChecksums;
+}
+
+const QSet<QByteArray>& FolderMetadata::keyChecksumsRemoved() const
+{
+    return _keyChecksumsRemoved;
 }
 
 void FolderMetadata::initEmptyMetadata()
@@ -1009,7 +1014,9 @@ void FolderMetadata::createNewMetadataKeyForEncryption()
         return;
     }
     if (!_metadataKeyForEncryption.isEmpty()) {
-        _keyChecksums.remove(calcSha256(_metadataKeyForEncryption));
+        const auto checksumToRemove = calcSha256(_metadataKeyForEncryption);
+        _keyChecksumsRemoved.insert(checksumToRemove);
+        _keyChecksums.remove(checksumToRemove);
     }
     _metadataKeyForEncryption = EncryptionHelper::generateRandom(metadataKeySize);
     if (!_metadataKeyForEncryption.isEmpty()) {

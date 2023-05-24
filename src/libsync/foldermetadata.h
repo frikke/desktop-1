@@ -100,6 +100,7 @@ public:
     [[nodiscard]] const QByteArray metadataKeyForEncryption() const;
     [[nodiscard]] const QByteArray metadataKeyForDecryption() const;
     [[nodiscard]] const QSet<QByteArray> &keyChecksums() const;
+    [[nodiscard]] const QSet<QByteArray> &keyChecksumsRemoved() const;
 
     QByteArray encryptedMetadata();
 
@@ -166,10 +167,11 @@ private:
     AccountPtr _account;
     QByteArray _initialMetadata;
 
-    bool _isRootEncryptedFolder = true;
+    bool _isRootEncryptedFolder = false;
     QByteArray _metadataKeyForEncryption;
     QByteArray _metadataKeyForDecryption; // used for storing initial metadataKey to use for decryption, especially in nested folders when changing the metadataKey and re-encrypting nested dirs
     QSet<QByteArray> _keyChecksums;
+    QSet<QByteArray> _keyChecksumsRemoved;
     QByteArray _metadataNonce;
 
     QByteArray _fileDropMetadataNonceBase64;
