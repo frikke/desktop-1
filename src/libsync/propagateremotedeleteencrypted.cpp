@@ -53,13 +53,15 @@ void PropagateRemoteDeleteEncrypted::slotFolderEncryptedMetadataReceived(const Q
     }
     const auto fullFolderRemotePathSanitized = _fullFolderRemotePath.startsWith(QLatin1Char('/')) ? _fullFolderRemotePath.mid(1) : _fullFolderRemotePath;
     SyncJournalFileRecord rec;
-    if (!_propagator->_journal->getTopLevelE2eFolderRecord(_fullFolderRemotePath, &rec) || !rec.isValid()) {
+    if (!_propagator->_journal->getRootE2eFolderRecord(_fullFolderRemotePath, &rec) || !rec.isValid()) {
         taskFailed();
         return;
     }
 
-    const auto rootE2eeFolderPath = rec.path() == fullFolderRemotePathSanitized ? QStringLiteral("/") : rec.path();
-    auto metadata = (new FolderMetadata(_propagator->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
+    auto metadata = (new FolderMetadata(
+        _propagator->account(),
+        statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact),
+        FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), fullFolderRemotePathSanitized))));
     connect(metadata, &FolderMetadata::setupComplete, this, [this, metadata] {
         if (!metadata->isValid()) {
             taskFailed();

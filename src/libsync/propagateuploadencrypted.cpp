@@ -119,7 +119,7 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
 
     // Encrypt File!
     SyncJournalFileRecord rec;
-    if (!_propagator->_journal->getTopLevelE2eFolderRecord(_remoteParentAbsolutePath, &rec) || !rec.isValid()) {
+    if (!_propagator->_journal->getRootE2eFolderRecord(_remoteParentAbsolutePath, &rec) || !rec.isValid()) {
         if (_isFolderLocked) {
             connect(this, &PropagateUploadEncrypted::folderUnlocked, this, &PropagateUploadEncrypted::error);
             unlockFolder();
@@ -129,11 +129,11 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
         return;
     }
 
-    const auto rootE2eeFolderPath = rec.path() == _remoteParentAbsolutePath ? QStringLiteral("/") : rec.path();
-
-    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(),
-                                                               statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact),
-                                                               FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(
+        _propagator->account(),
+        statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact),
+        FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), _remoteParentAbsolutePath)))
+    );
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, statusCode, metadata] {
         if (!metadata->isValid()) {
             if (_isFolderLocked) {
@@ -179,8 +179,8 @@ void PropagateUploadEncrypted::slotFolderEncryptedMetadataReceived(const QJsonDo
         encryptedFile.initializationVector = EncryptionHelper::generateRandom(16);
 
         _item->_encryptedFileName = _remoteParentPath + QLatin1Char('/') + encryptedFile.encryptedFilename;
-        _item->_e2eEncryptionStatusRemote = FolderMetadata::fromMedataVersionToItemEncryptionStatus(metadata->existingMetadataVersion());
-        _item->_e2eEncryptionMaximumAvailableStatus = FolderMetadata::fromMedataVersionToItemEncryptionStatus(FolderMetadata::latestSupportedMetadataVersion(_propagator->account()->capabilities().clientSideEncryptionVersion()));
+        _item->_e2eEncryptionStatusRemote = metadata->existingMetadataEncryptionStatus();
+        _item->_e2eEncryptionMaximumAvailableStatus = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_propagator->account()->capabilities().clientSideEncryptionVersion());
 
         qCDebug(lcPropagateUploadEncrypted) << "Creating the encrypted file.";
 

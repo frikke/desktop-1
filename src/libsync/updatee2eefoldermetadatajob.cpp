@@ -124,13 +124,16 @@ void UpdateE2eeFolderMetadataJob::slotFolderEncryptedMetadataReceived(const QJso
     qCDebug(lcUpdateFileDropMetadataJob) << "Metadata Received, Preparing it for the new file." << json.toVariant();
     // Encrypt File!
     SyncJournalFileRecord rec;
-    if (!propagator()->_journal->getTopLevelE2eFolderRecord(_encryptedRemotePath, &rec) || !rec.isValid()) {
+    if (!propagator()->_journal->getRootE2eFolderRecord(_encryptedRemotePath, &rec) || !rec.isValid()) {
         unlockFolder(false);
         return;
     }
 
-    const auto rootE2eeFolderPath = rec.path() == _encryptedRemotePath ? QStringLiteral("/") : rec.path();
-    _metadata.reset(new FolderMetadata(propagator()->account(), statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
+    _metadata.reset(new FolderMetadata(
+        propagator()->account(),
+        statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact),
+        FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), _encryptedRemotePath)))
+    );
     connect(_metadata.data(), &FolderMetadata::setupComplete, this, [this] {
         if (!_metadata->isValid() || (!_metadata->moveFromFileDropToFiles() && !_metadata->encryptedMetadataNeedUpdate())) {
             unlockFolder(false);
@@ -199,7 +202,7 @@ void UpdateE2eeFolderMetadataJob::unlockFolder(bool success)
 
     if (!_isFolderLocked) {
         if (success) {
-            _item->_e2eEncryptionStatus = FolderMetadata::fromMedataVersionToItemEncryptionStatus(_metadata->encryptedMetadataVersion());
+            _item->_e2eEncryptionStatus = _metadata->encryptedMetadataEncryptionStatus();
         }
         finished(itemStatus);
         return;
@@ -216,8 +219,8 @@ void UpdateE2eeFolderMetadataJob::unlockFolder(bool success)
         _folderId.clear();
         _isFolderLocked = false;
 
-        _item->_e2eEncryptionStatus = FolderMetadata::fromMedataVersionToItemEncryptionStatus(_metadata->encryptedMetadataVersion());
-        _item->_e2eEncryptionStatusRemote = FolderMetadata::fromMedataVersionToItemEncryptionStatus(_metadata->encryptedMetadataVersion());
+        _item->_e2eEncryptionStatus = _metadata->encryptedMetadataEncryptionStatus();
+        _item->_e2eEncryptionStatusRemote = _metadata->encryptedMetadataEncryptionStatus();
 
         _isUnlockRunning = false;
         finished(SyncFileItem::Success);

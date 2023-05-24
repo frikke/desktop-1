@@ -95,12 +95,15 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
     _folderToken = token;
     const auto currentPath = !_pathNonEncrypted.isEmpty() ? _pathNonEncrypted : _path;
     SyncJournalFileRecord rec;
-    if (!_journal->getTopLevelE2eFolderRecord(currentPath, &rec)) {
+    if (!_journal->getRootE2eFolderRecord(currentPath, &rec)) {
         emit finished(Error, EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted);
         return;
     }
-    const auto rootE2eeFolderPath = rec.path() == currentPath ? QStringLiteral("/") : rec.path();
-    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_account, {}, FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
+    QSharedPointer<FolderMetadata> metadata(new FolderMetadata(
+        _account,
+        {},
+        FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), currentPath)))
+    );
     connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, fileId, metadata] {
         const auto encryptedMetadata = metadata->encryptedMetadata();
         if (encryptedMetadata.isEmpty()) {
@@ -112,7 +115,7 @@ void EncryptFolderJob::slotLockForEncryptionSuccess(const QByteArray &fileId, co
             return;
         }
 
-        _folderEncryptionStatus = FolderMetadata::fromMedataVersionToItemEncryptionStatus(metadata->encryptedMetadataVersion());
+        _folderEncryptionStatus = metadata->encryptedMetadataEncryptionStatus();
 
         const auto storeMetadataJob = new StoreMetaDataApiJob(_account, fileId, encryptedMetadata, this);
         connect(storeMetadataJob, &StoreMetaDataApiJob::success, this, &EncryptFolderJob::slotUploadMetadataSuccess);

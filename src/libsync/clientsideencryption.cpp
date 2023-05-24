@@ -1922,7 +1922,7 @@ bool EncryptionHelper::dataDecryption(const QByteArray &key, const QByteArray &i
     return true;
 }
 
-QByteArray EncryptionHelper::gZipThenEncryptData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv, QByteArray &returnTag)
+QByteArray EncryptionHelper::gzipThenEncryptData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv, QByteArray &returnTag)
 {
     QBuffer gZipBuffer;
     auto gZipCompressionDevice = KCompressionDevice(&gZipBuffer, false, KCompressionDevice::GZip);

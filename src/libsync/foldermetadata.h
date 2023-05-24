@@ -39,7 +39,7 @@ class OWNCLOUDSYNC_EXPORT FolderMetadata : public QObject
         QByteArray encryptedFiledropKey;
     };
 
-public:
+    // based on api-version and "version" key in metadata JSON
     enum MetadataVersion {
         VersionUndefined = -1,
         Version1,
@@ -47,6 +47,7 @@ public:
         Version2_0,
     };
 
+public:
     struct EncryptedFile {
         QByteArray encryptionKey;
         QByteArray mimetype;
@@ -56,6 +57,7 @@ public:
         QString originalFilename;
     };
 
+    // required parts from root E2EE folder's metadata for version 2.0+
     struct OWNCLOUDSYNC_EXPORT RootEncryptedFolderInfo {
         explicit RootEncryptedFolderInfo(const QString &remotePath,
                                          const QByteArray &encryptionKey = {},
@@ -64,9 +66,11 @@ public:
 
         static RootEncryptedFolderInfo makeDefault();
 
+        static QString createRootPath(const QString &currentPath, const QString &possibleRootPath);
+
         QString path;
-        QByteArray keyForEncryption;
-        QByteArray keyForDecryption;
+        QByteArray keyForEncryption; // it can be different from keyForDecryption when new metadatKey is generated in root E2EE foler
+        QByteArray keyForDecryption; // always storing previous metadataKey to be able to decrypt nested E2EE folders' previous metadata
         QSet<QByteArray> keyChecksums;
         [[nodiscard]] bool keysSet() const;
     };
@@ -88,25 +92,21 @@ public:
 
     [[nodiscard]] bool moveFromFileDropToFiles();
 
-    const QByteArray &fileDrop() const;
+    [[nodiscard]] const QByteArray &fileDrop() const; // for unit tests
 
-    bool addUser(const QString &userId, const QSslCertificate &certificate);
-    bool removeUser(const QString &userId);
+    bool addUser(const QString &userId, const QSslCertificate &certificate); //adds a user to have access to this folder (always generates new metadata key)
+    bool removeUser(const QString &userId); // removes a user from this folder and removes and generates a new metadata key
 
     [[nodiscard]] const QByteArray metadataKeyForEncryption() const;
     [[nodiscard]] const QByteArray metadataKeyForDecryption() const;
-    const QSet<QByteArray> &keyChecksums() const;
+    [[nodiscard]] const QSet<QByteArray> &keyChecksums() const;
 
     QByteArray encryptedMetadata();
 
-    [[nodiscard]] MetadataVersion existingMetadataVersion() const;
-    [[nodiscard]] MetadataVersion encryptedMetadataVersion() const;
+    [[nodiscard]] EncryptionStatusEnums::ItemEncryptionStatus existingMetadataEncryptionStatus() const;
+    [[nodiscard]] EncryptionStatusEnums::ItemEncryptionStatus encryptedMetadataEncryptionStatus() const;
 
     [[nodiscard]] bool isVersion2AndUp() const;
-
-    static MetadataVersion latestSupportedMetadataVersion(const double versionFromApi);
-
-    static EncryptionStatusEnums::ItemEncryptionStatus fromMedataVersionToItemEncryptionStatus(const MetadataVersion &metadataVersion);
 
 private:
     QByteArray encryptedMetadataLegacy();
@@ -127,28 +127,32 @@ private:
 
     [[nodiscard]] QJsonObject convertFileToJsonObject(const EncryptedFile *encryptedFile, const QByteArray &metadataKey) const;
 
+    [[nodiscard]] const MetadataVersion latestSupportedMetadataVersion() const;
+
+    static EncryptionStatusEnums::ItemEncryptionStatus fromMedataVersionToItemEncryptionStatus(const MetadataVersion &metadataVersion);
+    static MetadataVersion fromItemEncryptionStatusToMedataVersion(const EncryptionStatusEnums::ItemEncryptionStatus &encryptionStatus);
+
 public slots:
     void addEncryptedFile(const EncryptedFile &f);
     void removeEncryptedFile(const EncryptedFile &f);
     void removeAllEncryptedFiles();
-    void setMetadataKeyForEncryption(const QByteArray &metadataKeyForDecryption);
-    void setMetadataKeyForDecryption(const QByteArray &metadataKeyForDecryption);
-    void setKeyChecksums(const QSet<QByteArray> &keyChecksums);
 
 private slots:
-    void setupMetadata();
-    void setupEmptyMetadata();
-    void setupEmptyMetadataLegacy();
+    void initMetadata();
+    void initEmptyMetadata();
+    void initEmptyMetadataLegacy();
+
     void setupExistingMetadata(const QByteArray &metadata);
-    void setupExistingLegacyMetadataForMigration(const QByteArray &metadata);
+    void setupExistingMetadataLegacy(const QByteArray &metadata);
+
     void setupVersionFromExistingMetadata(const QByteArray &metadata);
 
     void startFetchRootE2eeFolderMetadata(const QString &path);
     void fetchRootE2eeFolderMetadata(const QByteArray &folderId);
     void rootE2eeFolderEncryptedIdReceived(const QStringList &list);
-    void rootE2eeFolderEncryptedIdError(QNetworkReply *reply);
+    void rootE2eeFolderEncryptedIdReceivedError(QNetworkReply *reply);
     void rootE2eeFolderMetadataReceived(const QJsonDocument &json, int statusCode);
-    void rotE2eeFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode);
+    void rotE2eeFolderEncryptedMetadataReceivedError(const QByteArray &fileId, int httpReturnCode);
 
     void updateUsersEncryptedMetadataKey();
     void createNewMetadataKeyForEncryption();
@@ -165,7 +169,6 @@ private:
     bool _isRootEncryptedFolder = true;
     QByteArray _metadataKeyForEncryption;
     QByteArray _metadataKeyForDecryption; // used for storing initial metadataKey to use for decryption, especially in nested folders when changing the metadataKey and re-encrypting nested dirs
-
     QSet<QByteArray> _keyChecksums;
     QByteArray _metadataNonce;
 
@@ -174,6 +177,7 @@ private:
     QByteArray _fileDropKey;
     QByteArray _fileDropCipherTextEncryptedAndBase64;
     QJsonObject _fileDrop;
+
     // used by unit tests, must get assigned simultaneously with _fileDrop and not erased
     QJsonObject _fileDropFromServer;
 
@@ -184,9 +188,8 @@ private:
     MetadataVersion _existingMetadataVersion = MetadataVersion::VersionUndefined;
     MetadataVersion _encryptedMetadataVersion = MetadataVersion::VersionUndefined;
 
-    QVector<QPair<QString, QString>> _sharing;
-
     QVector<EncryptedFile> _files;
+
     bool _isMetadataValid = false;
 };
 

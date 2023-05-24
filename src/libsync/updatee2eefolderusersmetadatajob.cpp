@@ -31,7 +31,7 @@ UpdateE2eeFolderUsersMetadataJob::UpdateE2eeFolderUsersMetadataJob(const Account
                                                        const QString &folderUserId,
                                                        QSslCertificate certificate,
                                                        QObject *parent)
-    : QObject{parent}
+    : QObject(parent)
     , _account(account)
     , _journalDb(journalDb)
     , _syncFolderRemotePath(syncFolderRemotePath)
@@ -51,14 +51,14 @@ QString UpdateE2eeFolderUsersMetadataJob::path() const
     return _path;
 }
 
-QVariant UpdateE2eeFolderUsersMetadataJob::userData() const
+UpdateE2eeFolderUsersMetadataJob::UserData UpdateE2eeFolderUsersMetadataJob::userData() const
 {
     return _userData;
 }
 
 SyncFileItem::EncryptionStatus UpdateE2eeFolderUsersMetadataJob::encryptionStatus() const
 {
-    return FolderMetadata::fromMedataVersionToItemEncryptionStatus(_folderMetadata->encryptedMetadataVersion());
+    return _folderMetadata->encryptedMetadataEncryptionStatus();
 }
 
 void UpdateE2eeFolderUsersMetadataJob::start()
@@ -108,7 +108,7 @@ void UpdateE2eeFolderUsersMetadataJob::startUpdate()
                   tr("Invalid folder user update metadata operation for a folder user %1, for folder %2").arg(_folderUserId).arg(QString::fromUtf8(_folderId)));
 }
 
-void UpdateE2eeFolderUsersMetadataJob::setUserData(const QVariant &userData)
+void UpdateE2eeFolderUsersMetadataJob::setUserData(const UserData &userData)
 {
     _userData = userData;
 }
@@ -133,7 +133,7 @@ void UpdateE2eeFolderUsersMetadataJob::setKeyChecksums(const QSet<QByteArray> &k
     _keyChecksums = keyChecksums;
 }
 
-void UpdateE2eeFolderUsersMetadataJob::setJubJobItems(const QHash<QString, SyncFileItemPtr> subJobItems)
+void UpdateE2eeFolderUsersMetadataJob::setJubJobItems(const QHash<QString, SyncFileItemPtr> &subJobItems)
 {
     _subJobItems = subJobItems;
 }
@@ -215,20 +215,18 @@ void UpdateE2eeFolderUsersMetadataJob::slotMetadataReceived(const QJsonDocument 
         return;
     }
     SyncJournalFileRecord rec;
-    if (!_journalDb->getTopLevelE2eFolderRecord(_path, &rec) || !rec.isValid()) {
+    if (!_journalDb->getRootE2eFolderRecord(_path, &rec) || !rec.isValid()) {
         emit finished(-1, tr("Could not find top level E2EE folder for %1").arg(QString::fromUtf8(_folderId)));
         return;
     }
     const auto pathSanitized = _path.startsWith(QLatin1Char('/')) ? _path.mid(1) : _path;
-    const auto rootE2eeFolderPath = rec.path() == pathSanitized ? QStringLiteral("/") : rec.path();
     const FolderMetadata::RootEncryptedFolderInfo topLevelInitData(
-        rootE2eeFolderPath,
+        FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), pathSanitized),
         _metadataKeyForEncryption,
         _metadataKeyForDecryption,
         _keyChecksums
     );
     _folderMetadata.reset(new FolderMetadata(_account, statusCode == 404 ? QByteArray{} : json.toJson(QJsonDocument::Compact), topLevelInitData));
-    _folderMetadata->setKeyChecksums(_keyChecksums);
     connect(_folderMetadata.data(), &FolderMetadata::setupComplete, this, [this] {
         if (!_folderMetadata->isValid()) {
             slotUnlockFolder();
@@ -384,7 +382,6 @@ void UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished(int code, const QStrin
 {
     Q_UNUSED(message);
     if (code != 200) {
-        _pathsForDbRecordsToUpdate.clear();
         slotUnlockFolder();
         return;
     }
@@ -395,11 +392,15 @@ void UpdateE2eeFolderUsersMetadataJob::slotSubJobFinished(int code, const QStrin
         return;
     }
 
-    const auto foundInHash = _subJobItems.constFind(job->path());
+    {
+        QMutexLocker locker(&_subjobItemsMutex);
+        const auto foundInHash = _subJobItems.constFind(job->path());
 
-    if (foundInHash != _subJobItems.end()) {
-        foundInHash.value()->_e2eEncryptionStatus = job->encryptionStatus();
-        foundInHash.value()->_e2eEncryptionStatusRemote = job->encryptionStatus();
+        if (foundInHash != _subJobItems.end()) {
+            foundInHash.value()->_e2eEncryptionStatus = job->encryptionStatus();
+            foundInHash.value()->_e2eEncryptionStatusRemote = job->encryptionStatus();
+            _subJobItems.erase(foundInHash);
+        }
     }
 
     _subJobs.remove(job);

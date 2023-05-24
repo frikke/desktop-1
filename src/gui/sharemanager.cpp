@@ -514,13 +514,8 @@ void ShareManager::createE2EeShareJob(const QString &path,
                                                                          sharee->shareWith(),
                                                                          QSslCertificate{},
                                                                          this);
-    const QVariantMap userData{
-        {QStringLiteral("sharee"), QVariant::fromValue(sharee)},
-        {QStringLiteral("desiredPermissions"), QVariant::fromValue(permissions)},
-        {QStringLiteral("password"), password}
-    };
 
-    createE2eeShareJob->setUserData(userData);
+    createE2eeShareJob->setUserData({sharee, permissions, password});
     connect(createE2eeShareJob, &UpdateE2eeFolderUsersMetadataJob::finished, this, &ShareManager::slotCreateE2eeShareJobFinised);
     createE2eeShareJob->start();
 }
@@ -679,10 +674,9 @@ void ShareManager::slotCreateE2eeShareJobFinised(int statusCode, const QString &
         return;
     }
     disconnect(job, &UpdateE2eeFolderUsersMetadataJob::finished, this, &ShareManager::slotCreateE2eeShareJobFinised);
-    const auto userData = job->userData().toMap();
-    const auto isUserDataValid = userData.contains(QStringLiteral("sharee")) && userData.contains(QStringLiteral("desiredPermissions")) && userData.contains(QStringLiteral("password"));
-    Q_ASSERT(isUserDataValid);
-    if (!isUserDataValid) {
+    const auto userData = job->userData();
+    Q_ASSERT(userData.sharee);
+    if (!userData.sharee) {
         qCWarning(lcUserGroupShare) << "missing userData Map in UpdateE2eeShareMetadataJob instance!";
         emit serverError(-1, tr("Error"));
         return;
@@ -690,10 +684,7 @@ void ShareManager::slotCreateE2eeShareJobFinised(int statusCode, const QString &
     if (statusCode != 200) {
         emit serverError(statusCode, message);
     } else {
-        const auto sharee = userData.value(QStringLiteral("sharee")).template value<ShareePtr>();
-        const auto permissions = userData.value(QStringLiteral("desiredPermissions")).template value<Share::Permissions>();
-        const auto password = userData.value(QStringLiteral("password")).toString();
-        createShare(job->path(), Share::ShareType(sharee->type()), sharee->shareWith(), permissions, password);
+        createShare(job->path(), Share::ShareType(userData.sharee->type()), userData.sharee->shareWith(), userData.desiredPermissions, userData.password);
     }
 }
 }

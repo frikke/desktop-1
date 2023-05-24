@@ -80,13 +80,16 @@ void PropagateDownloadEncrypted::checkFolderEncryptedMetadata(const QJsonDocumen
                                         << _item->_instruction << _item->_file << _item->_encryptedFileName;
   const auto filename = _info.fileName();
   SyncJournalFileRecord rec;
-  if (!_propagator->_journal->getTopLevelE2eFolderRecord(_parentPathInDb, &rec) || !rec.isValid()) {
+  if (!_propagator->_journal->getRootE2eFolderRecord(_parentPathInDb, &rec) || !rec.isValid()) {
       emit failed();
       return;
   }
 
-  const auto rootE2eeFolderPath = rec.path() == _parentPathInDb ? QStringLiteral("/") : rec.path();
-  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(_propagator->account(), json.toJson(QJsonDocument::Compact), FolderMetadata::RootEncryptedFolderInfo(rootE2eeFolderPath)));
+  const QSharedPointer<FolderMetadata> metadata(new FolderMetadata(
+      _propagator->account(),
+      json.toJson(QJsonDocument::Compact),
+      FolderMetadata::RootEncryptedFolderInfo(FolderMetadata::RootEncryptedFolderInfo::createRootPath(rec.path(), _parentPathInDb)))
+  );
 
   connect(metadata.data(), &FolderMetadata::setupComplete, this, [this, metadata, filename] {
       if (metadata->isValid()) {

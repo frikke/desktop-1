@@ -995,7 +995,7 @@ Result<void, QString> SyncJournalDb::setFileRecord(const SyncJournalFileRecord &
     return {};
 }
 
-bool SyncJournalDb::getTopLevelE2eFolderRecord(const QString &remoteFolderPath, SyncJournalFileRecord *rec)
+bool SyncJournalDb::getRootE2eFolderRecord(const QString &remoteFolderPath, SyncJournalFileRecord *rec)
 {
     Q_ASSERT(rec);
     rec->_path.clear();

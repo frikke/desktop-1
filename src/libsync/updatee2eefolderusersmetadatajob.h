@@ -18,8 +18,10 @@
 #include "account.h"
 #include "gui/sharemanager.h"
 #include "syncfileitem.h"
+#include "gui/sharee.h"
 
 #include <QHash>
+#include <QMutex>
 #include <QObject>
 #include <QSslCertificate>
 #include <QString>
@@ -33,6 +35,13 @@ class OWNCLOUDSYNC_EXPORT UpdateE2eeFolderUsersMetadataJob : public QObject
 
 public:
     enum Operation { Invalid = -1, Add = 0, Remove, ReEncrypt };
+
+    struct UserData {
+        ShareePtr sharee;
+        Share::Permissions desiredPermissions;
+        QString password;
+    };
+
     explicit UpdateE2eeFolderUsersMetadataJob(const AccountPtr &account,
                                         SyncJournalDb *journalDb,
                                         const QString &syncFolderRemotePath,
@@ -44,19 +53,19 @@ public:
 
 public:
     [[nodiscard]] QString path() const;
-    [[nodiscard]] QVariant userData() const;
+    [[nodiscard]] UserData userData() const;
     [[nodiscard]] SyncFileItem::EncryptionStatus encryptionStatus() const;
 
 public slots:
     void start();
     void startUpdate();
-    void setUserData(const QVariant &userData);
+    void setUserData(const UserData &userData);
     void setFolderToken(const QByteArray &folderToken);
     void setMetadataKeyForEncryption(const QByteArray &metadataKey);
     void setMetadataKeyForDecryption(const QByteArray &metadataKey);
     void setKeyChecksums(const QSet<QByteArray> &keyChecksums);
 
-    void setJubJobItems(const QHash<QString, SyncFileItemPtr> subJobItems);
+    void setJubJobItems(const QHash<QString, SyncFileItemPtr> &subJobItems);
 
 private slots:
     void slotCertificatesFetchedFromServer(const QHash<QString, QSslCertificate> &results);
@@ -98,9 +107,9 @@ private:
     QSet<QByteArray> _keyChecksums;
     QSharedPointer<FolderMetadata> _folderMetadata;
     QSet<UpdateE2eeFolderUsersMetadataJob *> _subJobs;
-    QVariant _userData;
-    QStringList _pathsForDbRecordsToUpdate;
+    UserData _userData;
     QHash<QString, SyncFileItemPtr> _subJobItems;
+    QMutex _subjobItemsMutex;
 };
 
 }

@@ -29,7 +29,7 @@ class OWNCLOUDSYNC_EXPORT UpdateMigratedE2eeMetadataJob : public PropagatorJob
 public:
     explicit UpdateMigratedE2eeMetadataJob(OwncloudPropagator *propagator, const SyncFileItemPtr &syncFileItem, const QString &path, const QString &folderRemotePath);
 
-    bool scheduleSelfOrChild() override;
+    [[nodiscard]] bool scheduleSelfOrChild() override;
 
     [[nodiscard]] JobParallelism parallelism() const override;
 

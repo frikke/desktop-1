@@ -70,6 +70,11 @@ FolderMetadata::RootEncryptedFolderInfo FolderMetadata::RootEncryptedFolderInfo:
     return RootEncryptedFolderInfo{QStringLiteral("/")};
 }
 
+QString FolderMetadata::RootEncryptedFolderInfo::createRootPath(const QString &currentPath, const QString &possibleRootPath)
+{
+    return currentPath == possibleRootPath ? QStringLiteral("/") : currentPath;
+}
+
 bool FolderMetadata::RootEncryptedFolderInfo::keysSet() const
 {
     return !keyForEncryption.isEmpty() && !keyForDecryption.isEmpty() && !keyChecksums.isEmpty();
@@ -80,7 +85,7 @@ FolderMetadata::FolderMetadata(AccountPtr account)
     _isRootEncryptedFolder(true)
 {
     qCInfo(lcCseMetadata()) << "Setting up an Empty Metadata";
-    setupEmptyMetadata();
+    initEmptyMetadata();
 }
 
 FolderMetadata::FolderMetadata(AccountPtr account,
@@ -119,15 +124,15 @@ FolderMetadata::FolderMetadata(AccountPtr account,
         && !rootEncryptedFolderInfo.path.isEmpty()) {
         startFetchRootE2eeFolderMetadata(rootEncryptedFolderInfo.path);
     } else {
-        setupMetadata();
+        initMetadata();
     }
 }
 
-void FolderMetadata::setupMetadata()
+void FolderMetadata::initMetadata()
 {
     if (_initialMetadata.isEmpty()) {
         qCInfo(lcCseMetadata()) << "Setting up empty metadata";
-        setupEmptyMetadata();
+        initEmptyMetadata();
         return;
     }
 
@@ -145,16 +150,16 @@ void FolderMetadata::setupExistingMetadata(const QByteArray &metadata)
     const auto doc = QJsonDocument::fromJson(metadata);
     qCDebug(lcCseMetadata()) << "Got existing metadata:" << doc.toJson(QJsonDocument::Compact);
 
-    if (static_cast<int>(existingMetadataVersion()) < MetadataVersion::Version1) {
-        qCDebug(lcCseMetadata()) << "Could not setup metadata. Incorrect version" << existingMetadataVersion();
+    if (_existingMetadataVersion < MetadataVersion::Version1) {
+        qCDebug(lcCseMetadata()) << "Could not setup metadata. Incorrect version" << _existingMetadataVersion;
         return;
     }
-    if (static_cast<int>(existingMetadataVersion()) < MetadataVersion::Version2_0) {
-        setupExistingLegacyMetadataForMigration(metadata);
+    if (_existingMetadataVersion < MetadataVersion::Version2_0) {
+        setupExistingMetadataLegacy(metadata);
         return;
     }
     
-    qCDebug(lcCseMetadata()) << "Setting up latest metadata version" << existingMetadataVersion();
+    qCDebug(lcCseMetadata()) << "Setting up latest metadata version" << _existingMetadataVersion;
     const auto metaDataStr = metadataStringFromOCsDocument(doc);
     const auto metaDataDoc = QJsonDocument::fromJson(metaDataStr.toLocal8Bit());
 
@@ -248,10 +253,10 @@ void FolderMetadata::setupExistingMetadata(const QByteArray &metadata)
     _isMetadataValid = true;
 }
 
-void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &metadata)
+void FolderMetadata::setupExistingMetadataLegacy(const QByteArray &metadata)
 {
     const auto doc = QJsonDocument::fromJson(metadata);
-    qCDebug(lcCseMetadata()) << "Setting up legacy existing metadata version" << existingMetadataVersion() << doc.toJson(QJsonDocument::Compact);
+    qCDebug(lcCseMetadata()) << "Setting up legacy existing metadata version" << _existingMetadataVersion << doc.toJson(QJsonDocument::Compact);
 
     const auto metaDataStr = metadataStringFromOCsDocument(doc);
     const auto metaDataDoc = QJsonDocument::fromJson(metaDataStr.toLocal8Bit());
@@ -271,10 +276,10 @@ void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &m
     }
 
     if (metadataKeyForDecryption().isEmpty()
-        && existingMetadataVersion() < latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion())) {
+        && _existingMetadataVersion < latestSupportedMetadataVersion()) {
         // parse version 1.0
-        qCDebug(lcCseMetadata()) << "Migrating from" << existingMetadataVersion() << "to"
-                                 << latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion());
+        qCDebug(lcCseMetadata()) << "Migrating from" << _existingMetadataVersion << "to"
+                                 << latestSupportedMetadataVersion();
         const auto metadataKeys = metadataObj["metadataKeys"].toObject();
         if (metadataKeys.isEmpty()) {
             qCDebug(lcCseMetadata()) << "Could not migrate. No metadata keys found!";
@@ -346,7 +351,7 @@ void FolderMetadata::setupExistingLegacyMetadataForMigration(const QByteArray &m
         _files.push_back(file);
     }
 
-    if (!checkMetadataKeyChecksum(metadataKey, metadataKeyChecksum) && static_cast<int>(existingMetadataVersion() >= MetadataVersion::Version1_2)) {
+    if (!checkMetadataKeyChecksum(metadataKey, metadataKeyChecksum) && _existingMetadataVersion >= MetadataVersion::Version1_2) {
         qCInfo(lcCseMetadata) << "checksum comparison failed"
                               << "server value" << metadataKeyChecksum << "client value" << computeMetadataKeyChecksum(metadataKey);
         if (!_account->shouldSkipE2eeMetadataChecksumValidation()) {
@@ -513,10 +518,10 @@ const QSet<QByteArray>& FolderMetadata::keyChecksums() const
     return _keyChecksums;
 }
 
-void FolderMetadata::setupEmptyMetadata()
+void FolderMetadata::initEmptyMetadata()
 {
     if (_account->capabilities().clientSideEncryptionVersion() < 2.0) {
-        return setupEmptyMetadataLegacy();
+        return initEmptyMetadataLegacy();
     }
     qCDebug(lcCseMetadata()) << "Setting up empty metadata v2";
     if (_isRootEncryptedFolder) {
@@ -528,15 +533,13 @@ void FolderMetadata::setupEmptyMetadata()
     emitSetupComplete();
 }
 
-void FolderMetadata::setupEmptyMetadataLegacy()
+void FolderMetadata::initEmptyMetadataLegacy()
 {
     qCDebug(lcCseMetadata) << "Settint up legacy empty metadata";
     _metadataKeyForEncryption = EncryptionHelper::generateRandom(metadataKeySize);
     _metadataKeyForDecryption = _metadataKeyForEncryption;
     QString publicKey = _account->e2e()->_publicKey.toPem().toBase64();
     QString displayName = _account->displayName();
-
-    _sharing.append({displayName, publicKey});
 
     _isMetadataValid = true;
 
@@ -551,13 +554,13 @@ QByteArray FolderMetadata::encryptedMetadata()
         return {};
     }
 
-    if (latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion()) < MetadataVersion::Version2_0) {
+    if (latestSupportedMetadataVersion() < MetadataVersion::Version2_0) {
         return encryptedMetadataLegacy();
     }
 
     qCDebug(lcCseMetadata()) << "Encrypting metadata for latest version"
-                             << latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion());
-    if (_isRootEncryptedFolder && _folderUsers.isEmpty() && existingMetadataVersion() < MetadataVersion::Version2_0) {
+                             << latestSupportedMetadataVersion();
+    if (_isRootEncryptedFolder && _folderUsers.isEmpty() && _existingMetadataVersion < MetadataVersion::Version2_0) {
         // migrated from legacy version, create metadata key and setup folderUsrs array
         createNewMetadataKeyForEncryption();
     }
@@ -606,12 +609,11 @@ QByteArray FolderMetadata::encryptedMetadata()
 
     QByteArray authenticationTag;
     const auto initializationVector = EncryptionHelper::generateRandom(metadataKeySize);
-    const auto encryptedCipherText = EncryptionHelper::gZipThenEncryptData(metadataKeyForEncryption(), cipherTextDoc.toJson(QJsonDocument::Compact), initializationVector, authenticationTag).toBase64();
+    const auto encryptedCipherText = EncryptionHelper::gzipThenEncryptData(metadataKeyForEncryption(), cipherTextDoc.toJson(QJsonDocument::Compact), initializationVector, authenticationTag).toBase64();
     const QJsonObject metadata{{cipherTextKey, QJsonValue::fromVariant(encryptedCipherText)},
                                {nonceKey, QJsonValue::fromVariant(initializationVector.toBase64())},
                                {authenticationTagKey, QJsonValue::fromVariant(authenticationTag.toBase64())}};
 
-    const auto metadataVersionFromApi = _account->capabilities().clientSideEncryptionVersion();
     QJsonObject metaObject = {{metadataJsonKey, metadata}, {versionKey, QString::number(_account->capabilities().clientSideEncryptionVersion(), 'g', 2)}};
 
     QJsonArray folderUsers;
@@ -649,7 +651,7 @@ QByteArray FolderMetadata::encryptedMetadata()
 
     auto jsonString = internalMetadata.toJson();
 
-    _encryptedMetadataVersion = latestSupportedMetadataVersion(metadataVersionFromApi);
+    _encryptedMetadataVersion = latestSupportedMetadataVersion();
 
     return internalMetadata.toJson();
 }
@@ -709,39 +711,32 @@ QByteArray FolderMetadata::encryptedMetadataLegacy()
         metaObject.insert(filedropKey, filedrop);
     }
 
-    _encryptedMetadataVersion = latestSupportedMetadataVersion(version);
+    _encryptedMetadataVersion = fromItemEncryptionStatusToMedataVersion(EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(version));
 
     QJsonDocument internalMetadata;
     internalMetadata.setObject(metaObject);
     return internalMetadata.toJson();
 }
 
-FolderMetadata::MetadataVersion FolderMetadata::existingMetadataVersion() const
+EncryptionStatusEnums::ItemEncryptionStatus FolderMetadata::existingMetadataEncryptionStatus() const
 {
-    return _existingMetadataVersion;
+    return FolderMetadata::fromMedataVersionToItemEncryptionStatus(_existingMetadataVersion);
 }
 
-FolderMetadata::MetadataVersion FolderMetadata::encryptedMetadataVersion() const
+EncryptionStatusEnums::ItemEncryptionStatus FolderMetadata::encryptedMetadataEncryptionStatus() const
 {
-    return _encryptedMetadataVersion;
+    return FolderMetadata::fromMedataVersionToItemEncryptionStatus(_encryptedMetadataVersion);
 }
 
 bool FolderMetadata::isVersion2AndUp() const
 {
-    return existingMetadataVersion() >= MetadataVersion::Version2_0;
+    return _existingMetadataVersion >= MetadataVersion::Version2_0;
 }
 
-FolderMetadata::MetadataVersion FolderMetadata::latestSupportedMetadataVersion(const double versionFromApi)
+const FolderMetadata::MetadataVersion FolderMetadata::latestSupportedMetadataVersion() const
 {
-    if (versionFromApi >= 2.0) {
-        return MetadataVersion::Version2_0;
-    } else if (versionFromApi >= 1.2) {
-        return MetadataVersion::Version1_2;
-    } else if (versionFromApi >= 1.0) {
-        return MetadataVersion::Version1;
-    } else {
-        return MetadataVersion::VersionUndefined;
-    }
+    const auto itemEncryptionStatusFromApiVersion = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_account->capabilities().clientSideEncryptionVersion());
+    return fromItemEncryptionStatusToMedataVersion(itemEncryptionStatusFromApiVersion);
 }
 
 EncryptionStatusEnums::ItemEncryptionStatus FolderMetadata::fromMedataVersionToItemEncryptionStatus(const MetadataVersion &metadataVersion)
@@ -755,6 +750,21 @@ EncryptionStatusEnums::ItemEncryptionStatus FolderMetadata::fromMedataVersionToI
         return SyncFileItem::EncryptionStatus::Encrypted;
     }
     return SyncFileItem::EncryptionStatus::NotEncrypted;
+}
+
+FolderMetadata::MetadataVersion FolderMetadata::fromItemEncryptionStatusToMedataVersion(const EncryptionStatusEnums::ItemEncryptionStatus &encryptionStatus)
+{
+    switch (encryptionStatus) {
+    case EncryptionStatusEnums::ItemEncryptionStatus::Encrypted:
+        return MetadataVersion::Version1;
+    case EncryptionStatusEnums::ItemEncryptionStatus::EncryptedMigratedV1_2:
+        return MetadataVersion::Version1_2;
+    case EncryptionStatusEnums::ItemEncryptionStatus::EncryptedMigratedV2_0:
+        return MetadataVersion::Version2_0;
+    case EncryptionStatusEnums::ItemEncryptionStatus::NotEncrypted:
+        return MetadataVersion::VersionUndefined;
+    }
+    return MetadataVersion::VersionUndefined;
 }
 
 void FolderMetadata::addEncryptedFile(const EncryptedFile &f) {
@@ -806,7 +816,7 @@ bool FolderMetadata::isFileDropPresent() const
 
 bool FolderMetadata::encryptedMetadataNeedUpdate() const
 {
-    return latestSupportedMetadataVersion(_account->capabilities().clientSideEncryptionVersion()) > existingMetadataVersion();
+    return latestSupportedMetadataVersion() > _existingMetadataVersion;
 }
 
 bool FolderMetadata::moveFromFileDropToFiles()
@@ -852,7 +862,7 @@ void FolderMetadata::startFetchRootE2eeFolderMetadata(const QString &path)
     const auto job = new LsColJob(_account, path, this);
     job->setProperties({"resourcetype", "http://owncloud.org/ns:fileid"});
     connect(job, &LsColJob::directoryListingSubfolders, this, &FolderMetadata::rootE2eeFolderEncryptedIdReceived);
-    connect(job, &LsColJob::finishedWithError, this, &FolderMetadata::rootE2eeFolderEncryptedIdError);
+    connect(job, &LsColJob::finishedWithError, this, &FolderMetadata::rootE2eeFolderEncryptedIdReceivedError);
     job->start();
 }
 
@@ -860,7 +870,7 @@ void FolderMetadata::fetchRootE2eeFolderMetadata(const QByteArray &folderId)
 {
     const auto getMetadataJob = new GetMetadataApiJob(_account, folderId);
     connect(getMetadataJob, &GetMetadataApiJob::jsonReceived, this, &FolderMetadata::rootE2eeFolderMetadataReceived);
-    connect(getMetadataJob, &GetMetadataApiJob::error, this, &FolderMetadata::rotE2eeFolderEncryptedMetadataError);
+    connect(getMetadataJob, &GetMetadataApiJob::error, this, &FolderMetadata::rotE2eeFolderEncryptedMetadataReceivedError);
     getMetadataJob->start();
 }
 
@@ -875,7 +885,7 @@ void FolderMetadata::rootE2eeFolderEncryptedIdReceived(const QStringList &list)
     fetchRootE2eeFolderMetadata(job->_folderInfos.value(list.first()).fileId);
 }
 
-void FolderMetadata::rotE2eeFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode)
+void FolderMetadata::rotE2eeFolderEncryptedMetadataReceivedError(const QByteArray &fileId, int httpReturnCode)
 {
     Q_UNUSED(fileId);
     Q_UNUSED(httpReturnCode);
@@ -885,31 +895,31 @@ void FolderMetadata::rotE2eeFolderEncryptedMetadataError(const QByteArray &fileI
 void FolderMetadata::rootE2eeFolderMetadataReceived(const QJsonDocument &json, int statusCode)
 {
     if (json.isEmpty()) {
-        setupMetadata();
+        initMetadata();
         return;
     }
 
     QSharedPointer<FolderMetadata> rootE2eeFolderMetadata(new FolderMetadata(_account, json.toJson(QJsonDocument::Compact), RootEncryptedFolderInfo::makeDefault()));
     connect(rootE2eeFolderMetadata.data(), &FolderMetadata::setupComplete, this, [this, rootE2eeFolderMetadata]() {
         if (!rootE2eeFolderMetadata->isValid() || !rootE2eeFolderMetadata->isVersion2AndUp()) {
-            setupMetadata();
+            initMetadata();
             return;
         }
 
         _metadataKeyForEncryption = rootE2eeFolderMetadata->metadataKeyForEncryption();
 
         if (!isVersion2AndUp()) {
-            setupMetadata();
+            initMetadata();
             return;
         }
         _metadataKeyForDecryption = rootE2eeFolderMetadata->metadataKeyForDecryption();
         _metadataKeyForEncryption = rootE2eeFolderMetadata->metadataKeyForEncryption();
         _keyChecksums = rootE2eeFolderMetadata->keyChecksums();
-        setupMetadata();
+        initMetadata();
     });
 }
 
-void FolderMetadata::rootE2eeFolderEncryptedIdError(QNetworkReply *reply)
+void FolderMetadata::rootE2eeFolderEncryptedIdReceivedError(QNetworkReply *reply)
 {
     rootE2eeFolderMetadataReceived({}, reply ? reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() : 0);
 }
@@ -957,21 +967,6 @@ bool FolderMetadata::removeUser(const QString &userId)
     updateUsersEncryptedMetadataKey();
 
     return true;
-}
-
-void FolderMetadata::setMetadataKeyForDecryption(const QByteArray &metadataKeyForDecryption)
-{
-    _metadataKeyForDecryption = metadataKeyForDecryption;
-}
-
-void FolderMetadata::setMetadataKeyForEncryption(const QByteArray &metadataKeyForDecryption)
-{
-    _metadataKeyForEncryption = metadataKeyForDecryption;
-}
-
-void FolderMetadata::setKeyChecksums(const QSet<QByteArray> &keyChecksums)
-{
-    _keyChecksums = keyChecksums;
 }
 
 void FolderMetadata::updateUsersEncryptedMetadataKey()
@@ -1024,7 +1019,7 @@ void FolderMetadata::createNewMetadataKeyForEncryption()
 
 bool FolderMetadata::verifyMetadataKey(const QByteArray &metadataKey) const
 {
-    if (existingMetadataVersion() < MetadataVersion::Version2_0) {
+    if (_existingMetadataVersion < MetadataVersion::Version2_0) {
         return true;
     }
     if (metadataKey.isEmpty() || metadataKey.size() < metadataKeySize ) {
