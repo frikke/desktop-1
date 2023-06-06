@@ -180,6 +180,9 @@ public:
 public slots:
     void start() override;
 
+    void setShouldRollbackMetadataChanges(bool shouldRollbackMetadataChanges);
+    [[nodiscard]] bool shouldRollbackMetadataChanges() const;
+
 protected:
     bool finished() override;
 
@@ -195,6 +198,7 @@ private:
     QByteArray _token;
     QBuffer *_tokenBuf = nullptr;
     QPointer<SyncJournalDb> _journalDb;
+    bool _shouldRollbackMetadataChanges = false;
 };
 
 

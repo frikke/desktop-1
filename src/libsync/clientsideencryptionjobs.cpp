@@ -179,12 +179,29 @@ void UnlockEncryptFolderApiJob::start()
     req.setRawHeader("e2e-token", _token);
 
     QUrl url = Utility::concatUrlPath(account()->url(), path());
+
+    if (shouldRollbackMetadataChanges()) {
+        QUrlQuery query(url);
+        query.addQueryItem(QLatin1String("abort"), QLatin1String("true"));
+        url.setQuery(query);
+    }
+
     sendRequest("DELETE", url, req);
 
     AbstractNetworkJob::start();
     qCInfo(lcCseJob()) << "Starting the request to unlock.";
 
     qCInfo(lcCseJob()) << "unlock folder started for:" << path() << " for fileId: " << _fileId;
+}
+
+void UnlockEncryptFolderApiJob::setShouldRollbackMetadataChanges(bool shouldRollbackMetadataChanges)
+{
+    _shouldRollbackMetadataChanges = shouldRollbackMetadataChanges;
+}
+
+[[nodiscard]] bool UnlockEncryptFolderApiJob::shouldRollbackMetadataChanges() const
+{
+    return _shouldRollbackMetadataChanges;
 }
 
 bool UnlockEncryptFolderApiJob::finished()
@@ -263,6 +280,7 @@ void LockEncryptFolderApiJob::start()
         qCInfo(lcCseJob()) << "lock folder started for:" << path() << " for fileId: " << _fileId << " but we need to first lift the previous lock";
         const auto folderToken = EncryptionHelper::decryptStringAsymmetric(_account->e2e()->_privateKey, folderTokenEncrypted);
         const auto unlockJob = new OCC::UnlockEncryptFolderApiJob(_account, _fileId, folderToken, _journalDb, this);
+        unlockJob->setShouldRollbackMetadataChanges(true);
         connect(unlockJob, &UnlockEncryptFolderApiJob::done, this, [this]() {
             this->start();
         });

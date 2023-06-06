@@ -494,6 +494,7 @@ void SyncEngine::startSync()
                 const auto folderToken = EncryptionHelper::decryptStringAsymmetric(_account->e2e()->_privateKey, e2EeLockedFolder.second);
                 // TODO: We need to rollback changes done to metadata in case we have an active lock, this needs to be implemented on the server first
                 const auto unlockJob = new OCC::UnlockEncryptFolderApiJob(_account, folderId, folderToken, _journal, this);
+                unlockJob->setShouldRollbackMetadataChanges(true);
                 unlockJob->start();
             }
         }
