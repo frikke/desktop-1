@@ -130,6 +130,8 @@ private:
 
     [[nodiscard]] const MetadataVersion latestSupportedMetadataVersion() const;
 
+    [[nodiscard]] quint64 newCounter() const;
+
     static EncryptionStatusEnums::ItemEncryptionStatus fromMedataVersionToItemEncryptionStatus(const MetadataVersion &metadataVersion);
     static MetadataVersion fromItemEncryptionStatusToMedataVersion(const EncryptionStatusEnums::ItemEncryptionStatus &encryptionStatus);
 
@@ -186,6 +188,8 @@ private:
     QMap<int, QByteArray> _metadataKeys; //legacy, remove after migration is done
 
     QHash<QString, FolderUser> _folderUsers;
+
+    quint64 _counter;
 
     MetadataVersion _existingMetadataVersion = MetadataVersion::VersionUndefined;
     MetadataVersion _encryptedMetadataVersion = MetadataVersion::VersionUndefined;

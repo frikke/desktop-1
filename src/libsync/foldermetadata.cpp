@@ -29,6 +29,7 @@ namespace
 {
 constexpr auto authenticationTagKey = "authenticationTag";
 constexpr auto cipherTextKey = "ciphertext";
+constexpr auto counterKey = "counter";
 constexpr auto filesKey = "files";
 constexpr auto filedropKey = "filedrop";
 constexpr auto foldersKey = "folders";
@@ -233,6 +234,7 @@ void FolderMetadata::setupExistingMetadata(const QByteArray &metadata)
 
     const auto files = cipherTextDocument.object()[filesKey].toObject();
     const auto folders = cipherTextDocument.object()[foldersKey].toObject();
+    _counter = cipherTextDocument.object()[counterKey].toVariant().value<quint64>();
 
     for (auto it = files.constBegin(), end = files.constEnd(); it != end; ++it) {
         const auto parsedEncryptedFile = parseEncryptedFileFromJson(it.key(), it.value());
@@ -598,7 +600,7 @@ QByteArray FolderMetadata::encryptedMetadata()
         }
     }
 
-    QJsonObject cipherText = {{filesKey, files}, {foldersKey, folders}};
+    QJsonObject cipherText = {{counterKey, QJsonValue::fromVariant(newCounter())}, {filesKey, files}, {foldersKey, folders}};
 
     const auto isChecksumsArrayValid = (!_isRootEncryptedFolder && keyChecksums.isEmpty()) || (_isRootEncryptedFolder && !keyChecksums.isEmpty());
     Q_ASSERT(isChecksumsArrayValid);
@@ -742,6 +744,11 @@ const FolderMetadata::MetadataVersion FolderMetadata::latestSupportedMetadataVer
 {
     const auto itemEncryptionStatusFromApiVersion = EncryptionStatusEnums::fromEndToEndEncryptionApiVersion(_account->capabilities().clientSideEncryptionVersion());
     return fromItemEncryptionStatusToMedataVersion(itemEncryptionStatusFromApiVersion);
+}
+
+quint64 FolderMetadata::newCounter() const
+{
+    return _counter + 1;
 }
 
 EncryptionStatusEnums::ItemEncryptionStatus FolderMetadata::fromMedataVersionToItemEncryptionStatus(const MetadataVersion &metadataVersion)
