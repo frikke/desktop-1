@@ -245,7 +245,7 @@ void PropagateRemoteMkdir::slotMkcolJobFinished()
 void PropagateRemoteMkdir::slotEncryptFolderFinished(int status, EncryptionStatusEnums::ItemEncryptionStatus encryptionStatus)
 {
     if (status != EncryptFolderJob::Success) {
-        done(SyncFileItem::FatalError, tr("Failed to encrypt a folder %1").arg(_item->_file));
+        done(SyncFileItem::FatalError, tr("Failed to encrypt a folder %1").arg(_item->_file), ErrorCategory::GenericError);
         return;
     }
     qCDebug(lcPropagateRemoteMkdir) << "Success making the new folder encrypted";
