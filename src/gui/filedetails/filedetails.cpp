@@ -61,10 +61,16 @@ void FileDetails::setLocalPath(const QString &localPath)
     _fileWatcher.addPath(localPath);
     connect(&_fileWatcher, &QFileSystemWatcher::fileChanged, this, &FileDetails::refreshFileDetails);
 
-    const auto folder = FolderMan::instance()->folderForPath(_localPath);
-    const auto file = _localPath.mid(folder->cleanPath().length() + 1);
+    _folder = FolderMan::instance()->folderForPath(_localPath);
+    Q_ASSERT(_folder);
+    if (!_folder) {
+        qCWarning(lcFileDetails) << "No folder found for path:" << _localPath << "will not load file details.";
+        return;
+    }
 
-    if (!folder->journalDb()->getFileRecord(file, &_fileRecord)) {
+    const auto file = _localPath.mid(_folder->cleanPath().length() + 1);
+
+    if (!_folder->journalDb()->getFileRecord(file, &_fileRecord)) {
         qCWarning(lcFileDetails) << "Invalid file record for path:"
                                  << _localPath
                                  << "will not load file details.";
@@ -72,7 +78,24 @@ void FileDetails::setLocalPath(const QString &localPath)
 
     _filelockState = _fileRecord._lockstate;
     updateLockExpireString();
-    updateFileTagModel(folder);
+
+    const auto accountState = _folder->accountState();
+    Q_ASSERT(accountState);
+    if (!accountState) {
+        qCWarning(lcFileDetails) << "No account state found for path:" << _localPath << "will not correctly load file details.";
+        return;
+    }
+
+    const auto account = accountState->account();
+    Q_ASSERT(account);
+    if (!account) {
+        qCWarning(lcFileDetails) << "No account found for path:" << _localPath << "will not correctly load file details.";
+        return;
+    }
+
+    _sharingAvailable = account->capabilities().shareAPI();
+
+    updateFileTagModel();
 
     Q_EMIT fileChanged();
 }
@@ -160,16 +183,25 @@ FileTagModel *FileDetails::fileTagModel() const
     return _fileTagModel.get();
 }
 
-void FileDetails::updateFileTagModel(const Folder * const folder)
+void FileDetails::updateFileTagModel()
 {
-    Q_ASSERT(folder);
-    const auto account = folder->accountState()->account();
-    Q_ASSERT(account);
+    const auto localPath = _fileRecord.path();
+    const auto relPath = localPath.mid(_folder->cleanPath().length() + 1);
+    QString serverPath = _folder->remotePathTrailingSlash() + _fileRecord.path();
+ 
+    if (const auto vfsMode = _folder->vfs().mode(); _fileRecord.isVirtualFile() && vfsMode == Vfs::WithSuffix) {
+        if (const auto suffix = _folder->vfs().fileSuffix(); !suffix.isEmpty() && serverPath.endsWith(suffix)) {
+            serverPath.chop(suffix.length());
+        }
+    }
 
-    const auto serverRelPath = QString(folder->remotePathTrailingSlash() + name());
-
-    _fileTagModel = std::make_unique<FileTagModel>(serverRelPath, account);
+    _fileTagModel = std::make_unique<FileTagModel>(relPath, _folder->accountState()->account());
     Q_EMIT fileTagModelChanged();
+}
+
+bool FileDetails::sharingAvailable() const
+{
+    return _sharingAvailable;
 }
 
 } // namespace OCC

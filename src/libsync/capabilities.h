@@ -64,14 +64,18 @@ public:
     [[nodiscard]] bool shareResharing() const;
     [[nodiscard]] int shareDefaultPermissions() const;
     [[nodiscard]] bool chunkingNg() const;
+    [[nodiscard]] qint64 maxChunkSize() const;
+    [[nodiscard]] int maxConcurrentChunkUploads() const;
     [[nodiscard]] bool bulkUpload() const;
     [[nodiscard]] bool filesLockAvailable() const;
+    [[nodiscard]] bool filesLockTypeAvailable() const;
     [[nodiscard]] bool userStatus() const;
     [[nodiscard]] bool userStatusSupportsEmoji() const;
+    [[nodiscard]] bool ncAssistantEnabled() const;
     [[nodiscard]] QColor serverColor() const;
     [[nodiscard]] QColor serverTextColor() const;
 
-    /// Returns which kind of push notfications are available
+    /// Returns which kind of push notifications are available
     [[nodiscard]] PushNotificationTypes availablePushNotifications() const;
 
     /// Websocket url for files push notifications if available
@@ -96,6 +100,8 @@ public:
 
     /// return true if the activity app is enabled
     [[nodiscard]] bool hasActivities() const;
+
+    [[nodiscard]] bool isClientStatusReportingEnabled() const;
 
     /**
      * Returns the checksum types the server understands.
@@ -162,12 +168,20 @@ public:
      */
     [[nodiscard]] QStringList blacklistedFiles() const;
 
+    [[nodiscard]] QStringList forbiddenFilenameCharacters() const;
+    [[nodiscard]] QStringList forbiddenFilenameBasenames() const;
+    [[nodiscard]] QStringList forbiddenFilenameExtensions() const;
+    [[nodiscard]] QStringList forbiddenFilenames() const;
+
     /**
      * Whether conflict files should remain local (default) or should be uploaded.
      */
     [[nodiscard]] bool uploadConflictFiles() const;
 
     [[nodiscard]] bool groupFoldersAvailable() const;
+
+    [[nodiscard]] bool serverHasValidSubscription() const;
+    [[nodiscard]] QString desktopEnterpriseChannel() const;
 
     // Direct Editing
     void addDirectEditor(DirectEditor* directEditor);

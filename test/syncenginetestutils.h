@@ -108,6 +108,8 @@ public:
     void setModTime(const QString &relativePath, const QDateTime &modTime) override;
     void modifyLockState(const QString &relativePath, LockState lockState, int lockType, const QString &lockOwner, const QString &lockOwnerId, const QString &lockEditorId, quint64 lockTime, quint64 lockTimeout) override;
     void setE2EE(const QString &relativepath, const bool enabled) override;
+
+    [[nodiscard]] QFile find(const QString &relativePath) const;
 };
 
 class FileInfo : public FileModifier
@@ -140,11 +142,14 @@ public:
 
     void setModTimeKeepEtag(const QString &relativePath, const QDateTime &modTime);
 
+    void setIsLivePhoto(const QString &relativePath, bool isLivePhoto);
+
     void modifyLockState(const QString &relativePath, LockState lockState, int lockType, const QString &lockOwner, const QString &lockOwnerId, const QString &lockEditorId, quint64 lockTime, quint64 lockTimeout) override;
 
     void setE2EE(const QString &relativepath, const bool enabled) override;
 
     FileInfo *find(PathComponents pathComponents, const bool invalidateEtags = false);
+    FileInfo findRecursive(PathComponents pathComponents, const bool invalidateEtags = false);
 
     FileInfo *createDir(const QString &relativePath);
 
@@ -185,6 +190,7 @@ public:
     quint64 lockTime = 0;
     quint64 lockTimeout = 0;
     bool isEncrypted = false;
+    bool isLivePhoto = false;
 
     // Sorted by name to be able to compare trees
     QMap<QString, FileInfo> children;
@@ -206,6 +212,29 @@ public:
 
     // useful to be public for testing
     using QNetworkReply::setRawHeader;
+};
+
+class FakeJsonReply : public FakeReply
+{
+    Q_OBJECT
+public:
+    FakeJsonReply(QNetworkAccessManager::Operation op,
+                  const QNetworkRequest &request,
+                  QObject *parent,
+                  int httpReturnCode,
+                  const QJsonDocument &reply = QJsonDocument());
+
+    Q_INVOKABLE virtual void respond();
+
+public slots:
+    void slotSetFinished();
+
+public:
+    void abort() override { }
+    qint64 readData(char *buf, qint64 max) override;
+    [[nodiscard]] qint64 bytesAvailable() const override;
+
+    QByteArray _body;
 };
 
 class FakePropfindReply : public FakeReply
@@ -495,10 +524,11 @@ protected:
 class FakeCredentials : public OCC::AbstractCredentials
 {
     QNetworkAccessManager *_qnam;
+    QString _userName = "admin";
 public:
     FakeCredentials(QNetworkAccessManager *qnam) : _qnam{qnam} { }
     [[nodiscard]] QString authType() const override { return "test"; }
-    [[nodiscard]] QString user() const override { return "admin"; }
+    [[nodiscard]] QString user() const override { return _userName; }
     [[nodiscard]] QString password() const override { return "password"; }
     [[nodiscard]] QNetworkAccessManager *createQNAM() const override { return _qnam; }
     [[nodiscard]] bool ready() const override { return true; }
@@ -508,6 +538,10 @@ public:
     void persist() override { }
     void invalidateToken() override { }
     void forgetSensitiveData() override { }
+    void setUserName(const QString &userName)
+    {
+        _userName = userName;
+    }
 };
 
 class FakeFolder
@@ -606,18 +640,18 @@ struct ItemCompletedSpy : QSignalSpy {
 // QTest::toString overloads
 namespace OCC {
     inline char *toString(const SyncFileStatus &s) {
-        return QTest::toString(QString("SyncFileStatus(" + s.toSocketAPIString() + ")"));
+        return QTest::toString(QStringLiteral("SyncFileStatus(%1)").arg(s.toSocketAPIString()));
     }
 }
 
 inline void addFiles(QStringList &dest, const FileInfo &fi)
 {
     if (fi.isDir) {
-        dest += QString("%1 - dir").arg(fi.path());
+        dest += QStringLiteral("%1 - dir").arg(fi.path());
         foreach (const FileInfo &fi, fi.children)
             addFiles(dest, fi);
     } else {
-        dest += QString("%1 - %2 %3-bytes").arg(fi.path()).arg(fi.size).arg(fi.contentChar);
+        dest += QStringLiteral("%1 - %2 %3-bytes").arg(fi.path()).arg(fi.size).arg(fi.contentChar);
     }
 }
 
@@ -627,7 +661,7 @@ inline QString toStringNoElide(const FileInfo &fi)
     foreach (const FileInfo &fi, fi.children)
         addFiles(files, fi);
     files.sort();
-    return QString("FileInfo with %1 files(\n\t%2\n)").arg(files.size()).arg(files.join("\n\t"));
+    return QStringLiteral("FileInfo with %1 files(\n\t%2\n)").arg(files.size()).arg(files.join("\n\t"));
 }
 
 inline char *toString(const FileInfo &fi)
@@ -639,7 +673,7 @@ inline void addFilesDbData(QStringList &dest, const FileInfo &fi)
 {
     // could include etag, permissions etc, but would need extra work
     if (fi.isDir) {
-        dest += QString("%1 - %2 %3 %4").arg(
+        dest += QStringLiteral("%1 - %2 %3 %4").arg(
             fi.name,
             fi.isDir ? "dir" : "file",
             QString::number(fi.lastModified.toSecsSinceEpoch()),
@@ -647,7 +681,7 @@ inline void addFilesDbData(QStringList &dest, const FileInfo &fi)
         foreach (const FileInfo &fi, fi.children)
             addFilesDbData(dest, fi);
     } else {
-        dest += QString("%1 - %2 %3 %4 %5").arg(
+        dest += QStringLiteral("%1 - %2 %3 %4 %5").arg(
             fi.name,
             fi.isDir ? "dir" : "file",
             QString::number(fi.size),
@@ -661,5 +695,5 @@ inline char *printDbData(const FileInfo &fi)
     QStringList files;
     foreach (const FileInfo &fi, fi.children)
         addFilesDbData(files, fi);
-    return QTest::toString(QString("FileInfo with %1 files(%2)").arg(files.size()).arg(files.join(", ")));
+    return QTest::toString(QStringLiteral("FileInfo with %1 files(%2)").arg(files.size()).arg(files.join(", ")));
 }

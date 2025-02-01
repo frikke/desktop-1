@@ -47,6 +47,7 @@ class AccountState : public QObject, public QSharedData
 {
     Q_OBJECT
     Q_PROPERTY(AccountPtr account MEMBER _account)
+    Q_PROPERTY(State state READ state NOTIFY stateChanged)
 
 public:
     enum State {
@@ -64,6 +65,10 @@ public:
         /// don't bother the user too much and try again.
         ServiceUnavailable,
 
+        /// Connection is being redirected (likely a captive portal is in effect)
+        /// Do not proceed with connecting and check back later
+        RedirectDetected,
+
         /// Similar to ServiceUnavailable, but we know the server is down
         /// for maintenance
         MaintenanceMode,
@@ -77,21 +82,18 @@ public:
         ConfigurationError,
 
         /// We are currently asking the user for credentials
-        AskingCredentials
+        AskingCredentials,
+
+        /// Need to sign terms of service by going to web UI
+        NeedToSignTermsOfService,
     };
 
     /// The actual current connectivity status.
     using ConnectionStatus = ConnectionValidator::Status;
 
     /// Use the account as parent
-    explicit AccountState(AccountPtr account);
+    explicit AccountState(const AccountPtr &account);
     ~AccountState() override;
-
-    /** Creates an account state from settings and an Account object.
-     *
-     * Use from AccountManager with a prepared QSettings object only.
-     */
-    static AccountState *loadFromSettings(AccountPtr account, QSettings &settings);
 
     AccountPtr account() const;
 
@@ -159,12 +161,12 @@ public:
     ///Asks for user credentials
     void handleInvalidCredentials();
 
-    /** Returns the notifications status retrieved by the notificatons endpoint
+    /** Returns the notifications status retrieved by the notifications endpoint
      *  https://github.com/nextcloud/desktop/issues/2318#issuecomment-680698429
     */
     bool isDesktopNotificationsAllowed() const;
 
-    /** Set desktop notifications status retrieved by the notificatons endpoint
+    /** Set desktop notifications status retrieved by the notifications endpoint
     */
     void setDesktopNotificationsAllowed(bool isAllowed);
 
@@ -193,6 +195,7 @@ signals:
     void hasFetchedNavigationApps();
     void statusChanged();
     void desktopNotificationsAllowedChanged();
+    void termsOfServiceChanged(OCC::AccountPtr account, AccountState::State state);
 
 protected Q_SLOTS:
     void slotConnectionValidatorResult(OCC::ConnectionValidator::Status status, const QStringList &errors);
@@ -211,6 +214,7 @@ protected Q_SLOTS:
 private Q_SLOTS:
 
     void slotCheckConnection();
+    void slotCheckServerAvailibility();
     void slotPushNotificationsReady();
     void slotServerUserStatusChanged();
 
@@ -223,6 +227,7 @@ private:
     bool _waitingForNewCredentials = false;
     QDateTime _timeOfLastETagCheck;
     QPointer<ConnectionValidator> _connectionValidator;
+    TermsOfServiceChecker _termsOfServiceChecker;
     QByteArray _notificationsEtagResponseHeader;
     QByteArray _navigationAppsEtagResponseHeader;
 
@@ -255,6 +260,8 @@ private:
 
     QTimer _checkConnectionTimer;
     QElapsedTimer _lastCheckConnectionTimer;
+
+    QTimer _checkServerAvailibilityTimer;
 
     explicit AccountState() = default;
 

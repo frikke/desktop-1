@@ -11,32 +11,23 @@
  * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
  * for more details.
  */
-import QtQml 2.15
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import Style 1.0
+import QtQml
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Style
 
 MenuItem {
     id: root
 
     property string subline: ""
-    property string iconSource: "image://svgimage-custom-color/folder-group.svg/" + palette.buttonText
+    property string iconSource: "image://svgimage-custom-color/account-group.svg/" + palette.buttonText
+    property string backgroundIconSource: value
     property string toolTipText: root.text
 
-    NCToolTip {
+    ToolTip {
         visible: root.hovered && root.toolTipText !== ""
         text: root.toolTipText
-    }
-
-    background: Item {
-        height: parent.height
-        width: parent.width
-        Rectangle {
-            anchors.fill: parent
-            anchors.margins: Style.normalBorderWidth
-            color: parent.parent.hovered || parent.parent.visualFocus ? palette.highlight : "transparent"
-        }
     }
 
     contentItem: RowLayout {
@@ -45,13 +36,12 @@ MenuItem {
         anchors.rightMargin: Style.trayWindowMenuEntriesMargin
         spacing: Style.trayHorizontalMargin
 
-        Image {
-            source: root.iconSource
-            cache: true
-            sourceSize.width: root.height * Style.smallIconScaleFactor
-            sourceSize.height: root.height * Style.smallIconScaleFactor
-            verticalAlignment: Qt.AlignVCenter
-            horizontalAlignment: Qt.AlignHCenter
+        NCIconWithBackgroundImage {
+            source: root.backgroundIconSource
+
+            icon.source: root.iconSource
+            icon.height: height * Style.smallIconScaleFactor
+            icon.width: icon.height
 
             Layout.preferredHeight: root.height * Style.smallIconScaleFactor
             Layout.preferredWidth: root.height * Style.smallIconScaleFactor
@@ -64,7 +54,10 @@ MenuItem {
 
             spacing: Style.extraSmallSpacing
 
+            Layout.alignment: Qt.AlignVCenter
+
             Layout.fillWidth: true
+
         }
     }
 }

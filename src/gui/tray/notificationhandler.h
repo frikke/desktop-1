@@ -18,9 +18,10 @@ public:
 signals:
     void newNotificationList(OCC::ActivityList);
     void newIncomingCallsList(OCC::ActivityList);
+    void jobFinished();
 
-public slots:
-    void slotFetchNotifications();
+public:
+    bool startFetchNotifications();
 
 private slots:
     void slotNotificationsReceived(const QJsonDocument &json, int statusCode);
@@ -29,6 +30,7 @@ private slots:
 private:
     QPointer<JsonApiJob> _notificationJob;
     AccountState *_accountState;
+    QString _preFetchEtagHeader;
 };
 }
 

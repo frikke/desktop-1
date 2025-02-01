@@ -20,7 +20,7 @@
 #include <QQueue>
 #include <QTimer>
 #include <QElapsedTimer>
-#include <QNetworkConfigurationManager>
+#include <QNetworkInformation>
 
 #include "qtsingleapplication.h"
 
@@ -48,12 +48,6 @@ class Theme;
 class Folder;
 class ShellExtensionsServer;
 class SslErrorDialog;
-
-#ifdef Q_OS_MACOS
-namespace Mac {
-class FileProvider;
-}
-#endif
 
 /**
  * @brief The Application class
@@ -102,21 +96,25 @@ signals:
     void folderRemoved();
     void folderStateChanged(OCC::Folder *);
     void isShowingSettingsDialog();
+    void systemPaletteChanged();
 
 protected slots:
     void slotParseMessage(const QString &, QObject *);
     void slotCheckConnection();
-    void slotUseMonoIconsChanged(bool);
     void slotCleanup();
     void slotAccountStateAdded(OCC::AccountState *accountState);
     void slotAccountStateRemoved(OCC::AccountState *accountState);
-    void slotSystemOnlineConfigurationChanged(QNetworkConfiguration);
+    void slotSystemOnlineConfigurationChanged();
     void slotGuiIsShowingSettings();
 
 private:
     void setHelp();
 
     void handleEditLocallyFromOptions();
+
+    AccountManager::AccountsRestoreResult restoreLegacyAccount();
+    void setupConfigFile();
+    void setupAccountsAndFolders();
 
     /**
      * Maybe a newer version of the client was used with this config file:
@@ -148,7 +146,6 @@ private:
 
     ClientProxy _proxy;
 
-    QNetworkConfigurationManager _networkConfigurationManager;
     QTimer _checkConnectionTimer;
 
     QString _overrideServerUrl;
@@ -160,8 +157,6 @@ private:
     QScopedPointer<FolderMan> _folderManager;
 #if defined(Q_OS_WIN)
     QScopedPointer<ShellExtensionsServer> _shellExtensionsServer;
-#elif defined(Q_OS_MACOS)
-    QScopedPointer<Mac::FileProvider> _fileProvider;
 #endif
 };
 

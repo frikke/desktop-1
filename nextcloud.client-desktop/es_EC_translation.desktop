@@ -9,10 +9,11 @@ Icon=@APPLICATION_ICON_NAME@
 Keywords=@APPLICATION_NAME@;syncing;file;sharing;
 X-GNOME-Autostart-Delay=3
 MimeType=application/vnd.@APPLICATION_EXECUTABLE@;x-scheme-handler/@APPLICATION_URI_HANDLER_SCHEME@;
+SingleMainWindow=true
 Actions=Quit;
 
 # Translations
-
+@LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS@
 
 [Desktop Action Quit]
 Exec=@APPLICATION_EXECUTABLE@ --quit
@@ -21,5 +22,7 @@ Icon=@APPLICATION_EXECUTABLE@
 
 
 # Translations
+Name[es_EC]=Escritorio de @APPLICATION_NAME@
 Comment[es_EC]=@APPLICATION_NAME@ Cliente de sincronización de escritorio
 GenericName[es_EC]=Sincronización de carpeta
+Icon[es_EC]=@APPLICATION_ICON_NAME@

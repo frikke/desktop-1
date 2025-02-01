@@ -12,14 +12,14 @@
  * for more details.
  */
 
-import QtQml 2.15
-import QtQuick 2.15
-import QtQuick.Window 2.15 as QtWindow
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
-import QtQml.Models 2.15
-import Style 1.0
-import com.nextcloud.desktopclient 1.0
+import QtQml
+import QtQuick
+import QtQuick.Window as QtWindow
+import QtQuick.Layouts
+import QtQuick.Controls
+import QtQml.Models
+import Style
+import com.nextcloud.desktopclient
 import "./tray"
 
 ApplicationWindow {
@@ -30,31 +30,14 @@ ApplicationWindow {
     flags: Qt.Window | Qt.Dialog
     visible: true
 
+    LayoutMirroring.enabled: Application.layoutDirection === Qt.RightToLeft
+    LayoutMirroring.childrenInherit: true
+
     width: Style.minimumWidthResolveConflictsDialog
     height: Style.minimumHeightResolveConflictsDialog
     minimumWidth: Style.minimumWidthResolveConflictsDialog
     minimumHeight: Style.minimumHeightResolveConflictsDialog
     title: qsTr('Solve sync conflicts')
-
-    // TODO: Rather than setting all these palette colours manually,
-    // create a custom style and do it for all components globally
-    palette {
-        text: Style.ncTextColor
-        windowText: Style.ncTextColor
-        buttonText: Style.ncTextColor
-        brightText: Style.ncTextBrightColor
-        highlight: Style.lightHover
-        highlightedText: Style.ncTextColor
-        light: Style.lightHover
-        midlight: Style.ncSecondaryTextColor
-        mid: Style.darkerHover
-        dark: Style.menuBorder
-        button: Style.buttonBackgroundColor
-        window: Style.backgroundColor
-        base: Style.backgroundColor
-        toolTipBase: Style.backgroundColor
-        toolTipText: Style.ncTextColor
-    }
 
     onClosing: function(close) {
         Systray.destroyDialog(self);
@@ -101,9 +84,9 @@ ApplicationWindow {
 
                 font.pixelSize: Style.fontPixelSizeResolveConflictsDialog
 
-                checked: realModel.allExistingsSelected
+                checked: realModel.allConflictingSelected
                 onToggled: function() {
-                    realModel.selectAllExisting(checked)
+                    realModel.selectAllConflicting(checked)
                 }
             }
 
@@ -119,9 +102,9 @@ ApplicationWindow {
 
                 font.pixelSize: Style.fontPixelSizeResolveConflictsDialog
 
-                checked: realModel.allConflictingSelected
+                checked: realModel.allExistingsSelected
                 onToggled: function() {
-                    realModel.selectAllConflicting(checked)
+                    realModel.selectAllExisting(checked)
                 }
             }
         }
@@ -187,7 +170,7 @@ ApplicationWindow {
     }
 
     Rectangle {
-        color: Style.backgroundColor
+        color: palette.base
         anchors.fill: parent
         z: 1
     }

@@ -58,6 +58,9 @@ public:
     /// Migrate a csync_journal to the new path, if necessary. Returns false on error
     static bool maybeMigrateDb(const QString &localPath, const QString &absoluteJournalPath);
 
+    /// Given a sorted list of paths ending with '/', return whether or not the given path is within one of the paths of the list
+    static bool findPathInSelectiveSyncList(const QStringList &list, const QString &path);
+
     // To verify that the record could be found check with SyncJournalFileRecord::isValid()
     [[nodiscard]] bool getFileRecord(const QString &filename, SyncJournalFileRecord *rec) { return getFileRecord(filename.toUtf8(), rec); }
     [[nodiscard]] bool getFileRecord(const QByteArray &filename, SyncJournalFileRecord *rec);
@@ -67,6 +70,9 @@ public:
     [[nodiscard]] bool getFilesBelowPath(const QByteArray &path, const std::function<void(const SyncJournalFileRecord&)> &rowCallback);
     [[nodiscard]] bool listFilesInPath(const QByteArray &path, const std::function<void(const SyncJournalFileRecord&)> &rowCallback);
     [[nodiscard]] Result<void, QString> setFileRecord(const SyncJournalFileRecord &record);
+    [[nodiscard]] bool getRootE2eFolderRecord(const QString &remoteFolderPath, SyncJournalFileRecord *rec);
+    [[nodiscard]] bool listAllE2eeFoldersWithEncryptionStatusLessThan(const int status, const std::function<void(const SyncJournalFileRecord &)> &rowCallback);
+    [[nodiscard]] bool findEncryptedAncestorForRecord(const QString &filename, SyncJournalFileRecord *rec);
 
     void keyValueStoreSet(const QString &key, QVariant value);
     [[nodiscard]] qint64 keyValueStoreGetInt(const QString &key, qint64 defaultValue);
@@ -112,7 +118,7 @@ public:
     };
     struct UploadInfo
     {
-        int _chunk = 0;
+        int _chunkUploadV1 = 0;
         uint _transferid = 0;
         qint64 _size = 0;
         qint64 _modtime = 0;
@@ -219,11 +225,11 @@ public:
      * This usually creates some temporary files next to the db file, like
      * $dbfile-shm or $dbfile-wal.
      *
-     * returns true if it could be openend or is currently opened.
+     * returns true if it could be opened or is currently opened.
      */
     bool open();
 
-    /** Returns whether the db is currently openend. */
+    /** Returns whether the db is currently opened. */
     bool isOpen();
 
     /** Close the database */

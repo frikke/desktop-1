@@ -6,10 +6,11 @@
 #include <QNetworkProxyFactory>
 #include <QScreen>
 
-#include "owncloudwizard.h"
-#include "creds/webflowcredentials.h"
-#include "webview.h"
 #include "account.h"
+#include "common/utility.h"
+#include "creds/webflowcredentials.h"
+#include "owncloudwizard.h"
+#include "webview.h"
 
 namespace OCC {
 
@@ -25,7 +26,7 @@ WebViewPage::WebViewPage(QWidget *parent)
     _webView = new WebView(this);
 
     auto *layout = new QVBoxLayout(this);
-    layout->setMargin(0);
+    layout->setContentsMargins(0, 0, 0, 0);
     layout->addWidget(_webView, 1);
     setLayout(layout);
 
@@ -46,11 +47,7 @@ void WebViewPage::initializePage() {
     if (_ocWizard->registration()) {
         url = "https://nextcloud.com/register";
     } else {
-        url = _ocWizard->ocUrl();
-        if (!url.endsWith('/')) {
-            url += "/";
-        }
-        url += "index.php/login/flow";
+        url = Utility::trailingSlashPath(_ocWizard->ocUrl()) + "index.php/login/flow";
     }
     qCInfo(lcWizardWebiewPage()) << "Url to auth at: " << url;
     _webView->setUrl(QUrl(url));

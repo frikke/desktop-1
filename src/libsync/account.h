@@ -16,9 +16,17 @@
 #ifndef SERVERCONNECTION_H
 #define SERVERCONNECTION_H
 
+#include "accountfwd.h"
+#include "capabilities.h"
+#include "clientsideencryption.h"
+#include "clientstatusreporting.h"
+#include "common/utility.h"
+#include "syncfileitem.h"
+
 #include <QByteArray>
 #include <QUrl>
 #include <QNetworkCookie>
+#include <QNetworkProxy>
 #include <QNetworkRequest>
 #include <QSslSocket>
 #include <QSslCertificate>
@@ -26,16 +34,14 @@
 #include <QSslCipher>
 #include <QSslError>
 #include <QSharedPointer>
+#include <QHttpMultiPart>
+#include <QTimer>
 
 #ifndef TOKEN_AUTH_ONLY
 #include <QPixmap>
 #endif
 
-#include "common/utility.h"
 #include <memory>
-#include "capabilities.h"
-#include "clientsideencryption.h"
-#include "syncfileitem.h"
 
 class QSettings;
 class QNetworkReply;
@@ -51,8 +57,6 @@ class ReadPasswordJob;
 namespace OCC {
 
 class AbstractCredentials;
-class Account;
-using AccountPtr = QSharedPointer<Account>;
 class AccessManager;
 class SimpleNetworkJob;
 class PushNotifications;
@@ -82,13 +86,40 @@ class OWNCLOUDSYNC_EXPORT Account : public QObject
     Q_OBJECT
     Q_PROPERTY(QString id MEMBER _id)
     Q_PROPERTY(QString davUser MEMBER _davUser)
-    Q_PROPERTY(QString displayName MEMBER _displayName)
+    Q_PROPERTY(QString davDisplayName MEMBER _davDisplayName)
     Q_PROPERTY(QString prettyName READ prettyName NOTIFY prettyNameChanged)
     Q_PROPERTY(QUrl url MEMBER _url)
     Q_PROPERTY(bool e2eEncryptionKeysGenerationAllowed MEMBER _e2eEncryptionKeysGenerationAllowed)
     Q_PROPERTY(bool askUserForMnemonic READ askUserForMnemonic WRITE setAskUserForMnemonic NOTIFY askUserForMnemonicChanged)
+    Q_PROPERTY(AccountNetworkProxySetting networkProxySetting READ networkProxySetting WRITE setNetworkProxySetting NOTIFY networkProxySettingChanged)
+    Q_PROPERTY(QNetworkProxy::ProxyType proxyType READ proxyType WRITE setProxyType NOTIFY proxyTypeChanged)
+    Q_PROPERTY(QString proxyHostName READ proxyHostName WRITE setProxyHostName NOTIFY proxyHostNameChanged)
+    Q_PROPERTY(int proxyPort READ proxyPort WRITE setProxyPort NOTIFY proxyPortChanged)
+    Q_PROPERTY(bool proxyNeedsAuth READ proxyNeedsAuth WRITE setProxyNeedsAuth NOTIFY proxyNeedsAuthChanged)
+    Q_PROPERTY(QString proxyUser READ proxyUser WRITE setProxyUser NOTIFY proxyUserChanged)
+    Q_PROPERTY(QString proxyPassword READ proxyPassword WRITE setProxyPassword NOTIFY proxyPasswordChanged)
+    Q_PROPERTY(AccountNetworkTransferLimitSetting uploadLimitSetting READ uploadLimitSetting WRITE setUploadLimitSetting NOTIFY uploadLimitSettingChanged)
+    Q_PROPERTY(AccountNetworkTransferLimitSetting downloadLimitSetting READ downloadLimitSetting WRITE setDownloadLimitSetting NOTIFY downloadLimitSettingChanged)
+    Q_PROPERTY(unsigned int uploadLimit READ uploadLimit WRITE setUploadLimit NOTIFY uploadLimitChanged)
+    Q_PROPERTY(unsigned int downloadLimit READ downloadLimit WRITE setDownloadLimit NOTIFY downloadLimitChanged)
 
 public:
+    // We need to decide whether to use the client's global proxy settings or whether to use
+    // a specific setting for each account. Hence this enum
+    enum class AccountNetworkProxySetting {
+        GlobalProxy = 0,
+        AccountSpecificProxy,
+    };
+    Q_ENUM(AccountNetworkProxySetting)
+
+    enum class AccountNetworkTransferLimitSetting {
+        GlobalLimit = -2,
+        AutoLimit, // Value under 0 is interpreted as auto in general
+        NoLimit,
+        ManualLimit,
+    };
+    Q_ENUM(AccountNetworkTransferLimitSetting)
+
     static AccountPtr create();
     ~Account() override;
 
@@ -99,7 +130,7 @@ public:
     /**
      * The user that can be used in dav url.
      *
-     * This can very well be different frome the login user that's
+     * This can very well be different from the login user that's
      * stored in credentials()->user().
      */
     [[nodiscard]] QString davUser() const;
@@ -220,7 +251,7 @@ public:
     void setCredentialSetting(const QString &key, const QVariant &value);
 
     /** Assign a client certificate */
-    void setCertificate(const QByteArray certficate = QByteArray(), const QString privateKey = QString());
+    void setCertificate(const QByteArray certificate = QByteArray(), const QString privateKey = QString());
 
     /** Access the server capabilities */
     [[nodiscard]] const Capabilities &capabilities() const;
@@ -244,6 +275,8 @@ public:
      * Will be 0 if the version is not available yet.
      */
     [[nodiscard]] int serverVersionInt() const;
+
+    [[nodiscard]] bool serverHasMountRootProperty() const;
 
     static constexpr int makeServerVersion(const int majorVersion, const int minorVersion, const int patchVersion) {
         return (majorVersion << 16) + (minorVersion << 8) + patchVersion;
@@ -304,11 +337,18 @@ public:
     [[nodiscard]] PushNotifications *pushNotifications() const;
     void setPushNotificationsReconnectInterval(int interval);
 
+    void trySetupClientStatusReporting();
+
+    void reportClientStatus(const ClientStatusReportingStatus status) const;
+
     [[nodiscard]] std::shared_ptr<UserStatusConnector> userStatusConnector() const;
 
     void setLockFileState(const QString &serverRelativePath,
+                          const QString &remoteSyncPathWithTrailingSlash,
+                          const QString &localSyncPath, const QString &etag,
                           SyncJournalDb * const journal,
-                          const SyncFileItem::LockStatus lockStatus);
+                          const SyncFileItem::LockStatus lockStatus,
+                          const SyncFileItem::LockOwnerType lockOwnerType);
 
     SyncFileItem::LockStatus fileLockStatus(SyncJournalDb * const journal,
                                             const QString &folderRelativePath) const;
@@ -322,6 +362,55 @@ public:
     [[nodiscard]] bool e2eEncryptionKeysGenerationAllowed() const;
 
     [[nodiscard]] bool askUserForMnemonic() const;
+
+    void updateServerSubcription();
+    void updateDesktopEnterpriseChannel();
+
+    // Network-related settings
+    [[nodiscard]] AccountNetworkProxySetting networkProxySetting() const;
+    void setNetworkProxySetting(AccountNetworkProxySetting networkProxySetting);
+
+    [[nodiscard]] QNetworkProxy::ProxyType proxyType() const;
+    void setProxyType(QNetworkProxy::ProxyType proxyType);
+
+    [[nodiscard]] QString proxyHostName() const;
+    void setProxyHostName(const QString &host);
+
+    [[nodiscard]] int proxyPort() const;
+    void setProxyPort(int port);
+
+    [[nodiscard]] bool proxyNeedsAuth() const;
+    void setProxyNeedsAuth(bool needsAuth);
+
+    [[nodiscard]] QString proxyUser() const;
+    void setProxyUser(const QString &user);
+
+    [[nodiscard]] QString proxyPassword() const;
+    void setProxyPassword(const QString &password);
+
+    void setProxySettings(const AccountNetworkProxySetting networkProxySetting,
+                          const QNetworkProxy::ProxyType proxyType,
+                          const QString &proxyHostName,
+                          const int proxyPort,
+                          const bool proxyNeedsAuth,
+                          const QString &proxyUser,
+                          const QString &proxyPassword);
+
+    [[nodiscard]] AccountNetworkTransferLimitSetting uploadLimitSetting() const;
+    void setUploadLimitSetting(AccountNetworkTransferLimitSetting setting);
+
+    [[nodiscard]] AccountNetworkTransferLimitSetting downloadLimitSetting() const;
+    void setDownloadLimitSetting(AccountNetworkTransferLimitSetting setting);
+
+    /** in kbyte/s */
+    [[nodiscard]] unsigned int uploadLimit() const;
+    void setUploadLimit(unsigned int kbytes);
+
+    [[nodiscard]] unsigned int downloadLimit() const;
+    void setDownloadLimit(unsigned int kbytes);
+
+    [[nodiscard]] bool serverHasValidSubscription() const;
+    void setServerHasValidSubscription(bool valid);
 
 public slots:
     /// Used when forgetting credentials
@@ -367,16 +456,34 @@ signals:
     void lockFileSuccess();
     void lockFileError(const QString&);
 
+    void networkProxySettingChanged();
+    void proxyTypeChanged();
+    void proxyHostNameChanged();
+    void proxyPortChanged();
+    void proxyNeedsAuthChanged();
+    void proxyUserChanged();
+    void proxyPasswordChanged();
+    void uploadLimitSettingChanged();
+    void downloadLimitSettingChanged();
+    void uploadLimitChanged();
+    void downloadLimitChanged();
+    void termsOfServiceNeedToBeChecked();
+
 protected Q_SLOTS:
     void slotCredentialsFetched();
     void slotCredentialsAsked();
     void slotDirectEditingRecieved(const QJsonDocument &json);
 
+private slots:
+    void removeLockStatusChangeInprogress(const QString &serverRelativePath, const SyncFileItem::LockStatus lockStatus);
+
 private:
     Account(QObject *parent = nullptr);
     void setSharedThis(AccountPtr sharedThis);
+    void updateServerColors();
 
-    static QString davPathBase();
+    [[nodiscard]] static QString davPathBase();
+    [[nodiscard]] QColor serverColor() const;
 
     bool _trustCertificates = false;
 
@@ -386,6 +493,7 @@ private:
     QWeakPointer<Account> _sharedThis;
     QString _id;
     QString _davUser;
+    QString _davDisplayName;
     QString _displayName;
     QTimer _pushNotificationsReconnectTimer;
 #ifndef TOKEN_AUTH_ONLY
@@ -406,9 +514,11 @@ private:
     QSslConfiguration _sslConfiguration;
     Capabilities _capabilities;
     QString _serverVersion;
+    QColor _serverColor;
+    QColor _serverTextColor = QColorConstants::White;
     bool _skipE2eeMetadataChecksumValidation = false;
     QScopedPointer<AbstractSslErrorHandler> _sslErrorHandler;
-    QSharedPointer<QNetworkAccessManager> _am;
+    QSharedPointer<QNetworkAccessManager> _networkAccessManager;
     QScopedPointer<AbstractCredentials> _credentials;
     bool _http2Supported = false;
 
@@ -429,7 +539,25 @@ private:
 
     PushNotifications *_pushNotifications = nullptr;
 
+    std::unique_ptr<ClientStatusReporting> _clientStatusReporting;
+
     std::shared_ptr<UserStatusConnector> _userStatusConnector;
+
+    QHash<QString, QVector<SyncFileItem::LockStatus>> _lockStatusChangeInprogress;
+
+    AccountNetworkProxySetting _networkProxySetting = AccountNetworkProxySetting::GlobalProxy;
+    QNetworkProxy::ProxyType _proxyType = QNetworkProxy::NoProxy;
+    QString _proxyHostName;
+    int _proxyPort = 0;
+    bool _proxyNeedsAuth = false;
+    QString _proxyUser;
+    QString _proxyPassword;
+    AccountNetworkTransferLimitSetting _uploadLimitSetting = AccountNetworkTransferLimitSetting::GlobalLimit;
+    AccountNetworkTransferLimitSetting _downloadLimitSetting = AccountNetworkTransferLimitSetting::GlobalLimit;
+    unsigned int _uploadLimit = 0;
+    unsigned int _downloadLimit = 0;
+
+    bool _serverHasValidSubscription = false;
 
     /* IMPORTANT - remove later - FIXME MS@2019-12-07 -->
      * TODO: For "Log out" & "Remove account": Remove client CA certs and KEY!

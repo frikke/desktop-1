@@ -27,6 +27,10 @@
 #include "owncloudgui.h"
 #include "folderstatusmodel.h"
 
+#ifdef BUILD_FILE_PROVIDER_MODULE
+#include "macOS/fileprovidersettingscontroller.h"
+#endif
+
 class QModelIndex;
 class QNetworkReply;
 class QListWidgetItem;
@@ -131,6 +135,8 @@ private slots:
 private:
     bool event(QEvent *) override;
     QAction *addActionToEncryptionMessage(const QString &actionTitle, const QString &actionId);
+
+    void initializeE2eEncryptionSettingsMessage();
 
     /// Returns the alias of the selected folder, empty string if none
     [[nodiscard]] QString selectedFolderAlias() const;

@@ -15,113 +15,264 @@
 
 #include <Cocoa/Cocoa.h>
 #include <Sparkle/Sparkle.h>
-#include <Sparkle/SUUpdater.h>
 #include <AppKit/NSApplication.h>
 
 #include "common/utility.h"
 #include "configfile.h"
 #include "updater/sparkleupdater.h"
 
-@interface DelegateObject : NSObject <SUUpdaterDelegate>
-- (BOOL)updaterMayCheckForUpdates:(SUUpdater *)bundle;
-@end
-@implementation DelegateObject //(SUUpdaterDelegateInformalProtocol)
+@class NCSparkleUpdaterDelegate;
 
-- (BOOL)updaterMayCheckForUpdates:(SUUpdater *)bundle
+class Q_DECL_HIDDEN OCC::SparkleUpdater::SparkleInterface
 {
-    Q_UNUSED(bundle)
-    qCDebug(OCC::lcUpdater) << "Updater may check for updates: YES";
-    return YES;
+public:
+    explicit SparkleInterface(SparkleUpdater *parent)
+        : q(parent)
+    {
+    }
+
+    ~SparkleInterface()
+    {
+        [updaterController release];
+        [delegate release];
+    }
+
+    void statusChanged(const OCC::SparkleUpdater::State state, const QString &statusString = {})
+    {
+        q->_state = state;
+        q->_statusString = statusString;
+        emit q->statusChanged();
+    }
+
+    SPUStandardUpdaterController *updaterController;
+    NCSparkleUpdaterDelegate *delegate;
+
+private:
+    SparkleUpdater * const q;
+};
+
+
+@interface NCSparkleUpdaterDelegate : NSObject <SPUUpdaterDelegate>
+
+@property (readwrite, assign) OCC::SparkleUpdater::SparkleInterface *owner;
+@property (readwrite, retain) NSString *feedURLString;
+
+- (instancetype)initWithOwner:(OCC::SparkleUpdater::SparkleInterface *)owner;
+
+@end
+
+@implementation NCSparkleUpdaterDelegate
+
+- (instancetype)initWithOwner:(OCC::SparkleUpdater::SparkleInterface *)owner
+{
+    self = [super init];
+    if (self) {
+        _owner = owner;
+    }
+    return self;
+}
+
+- (BOOL)backgroundUpdateChecksAllowed
+{
+    const BOOL allowUpdateCheck = OCC::ConfigFile().skipUpdateCheck() ? NO : YES;
+    qCInfo(OCC::lcUpdater) << "Updater may check for updates:" << (allowUpdateCheck ? "YES" : "NO");
+    return allowUpdateCheck;
+}
+
+- (BOOL)updater:(nonnull SPUUpdater *)updater mayPerformUpdateCheck:(SPUUpdateCheck)updateCheck error:(NSError **)error
+{
+    Q_UNUSED(updater)
+    Q_UNUSED(updateCheck)
+    return [self backgroundUpdateChecksAllowed];
+}
+
+- (void)notifyStateChange:(const OCC::SparkleUpdater::State)state displayStatus:(const QString&)statusString
+{
+    qCInfo(OCC::lcUpdater) << statusString;
+    _owner->statusChanged(state, statusString);
 }
 
 // Sent when a valid update is found by the update driver.
-- (void)updater:(SUUpdater *)updater didFindValidUpdate:(SUAppcastItem *)update
+- (void)updater:(nonnull SPUUpdater *)updater didFindValidUpdate:(nonnull SUAppcastItem *)item
 {
     Q_UNUSED(updater)
-    Q_UNUSED(update)
-    qCDebug(OCC::lcUpdater) << "Found a valid update.";
+    Q_UNUSED(item)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto message = QObject::tr("Found a valid update: version %1", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::AwaitingUserInput
+              displayStatus:message];
 }
 
 // Sent when a valid update is not found.
-- (void)updaterDidNotFindUpdate:(SUUpdater *)update
+- (void)updaterDidNotFindUpdate:(nonnull SPUUpdater *)updater
 {
-    Q_UNUSED(update)
-    qCDebug(OCC::lcUpdater) << "No valid update found.";
+    Q_UNUSED(updater)
+    [self notifyStateChange:OCC::SparkleUpdater::State::Idle
+              displayStatus:QObject::tr("No valid update found.")];
 }
 
 // Sent immediately before installing the specified update.
-- (void)updater:(SUUpdater *)updater willInstallUpdate:(SUAppcastItem *)update
+- (void)updater:(nonnull SPUUpdater *)updater willInstallUpdate:(nonnull SUAppcastItem *)update
 {
     Q_UNUSED(updater)
-    Q_UNUSED(update)
-    qCDebug(OCC::lcUpdater) << "About to install update.";
+
+    const auto versionQstring = QString::fromNSString(update.displayVersionString);
+    const auto message = QObject::tr("About to install version %1 update.", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:message];
 }
 
-- (void) updater:(SUUpdater *)updater didAbortWithError:(NSError *)error
+- (void)updater:(nonnull SPUUpdater *)updater didAbortWithError:(nonnull NSError *)error
 {
     Q_UNUSED(updater)
-    qCDebug(OCC::lcUpdater) << error.description;
+
+    const auto errorQstring = QString::fromNSString(error.localizedDescription);
+    const auto message = QObject::tr("Aborted with error: %1", "%1 is version number").arg(errorQstring);
+    [self notifyStateChange:OCC::SparkleUpdater::State::Idle
+              displayStatus:message];
 }
 
-- (void)updater:(SUUpdater *)updater didFinishLoadingAppcast:(SUAppcast *)appcast
+- (void)updater:(nonnull SPUUpdater *)updater didFinishLoadingAppcast:(nonnull SUAppcast *)appcast
 {
     Q_UNUSED(updater)
     Q_UNUSED(appcast)
-    qCDebug(OCC::lcUpdater) << "Finished loading appcast.";
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:QObject::tr("Finished loading appcast.")];
 }
 
+- (void)updater:(nonnull SPUUpdater *)updater
+userDidMakeChoice:(SPUUserUpdateChoice)choice
+      forUpdate:(nonnull SUAppcastItem *)item
+          state:(nonnull SPUUserUpdateState *)state
+{
+    Q_UNUSED(updater)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    QString message;
+
+    switch(choice) {
+        case SPUUserUpdateChoiceSkip:
+            message = QObject::tr("Update version %1 will not be applied as it was chosen to be skipped.",  "%1 is version number").arg(versionQstring);
+            break;
+        case SPUUserUpdateChoiceInstall:
+            message = QObject::tr("Update version %1 will be installed.",  "%1 is version number").arg(versionQstring);
+            break;
+        case SPUUserUpdateChoiceDismiss:
+            message = QObject::tr("Update version %1 will not be applied as it was dismissed.",  "%1 is version number").arg(versionQstring);
+            break;
+    }
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Idle displayStatus:message];
+}
+
+- (void)updater:(nonnull SPUUpdater *)updater willDownloadUpdate:(nonnull SUAppcastItem *)item withRequest:(nonnull NSMutableURLRequest *)request
+{
+    Q_UNUSED(updater)
+    Q_UNUSED(request)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto message = QObject::tr("Downloading version %1 update.", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:message];
+}
+
+- (void)updater:(nonnull SPUUpdater *)updater didDownloadUpdate:(nonnull SUAppcastItem *)item
+{
+    Q_UNUSED(updater)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto message = QObject::tr("Downloaded version %1 update.", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:message];
+}
+
+- (void)updater:(nonnull SPUUpdater *)updater failedToDownloadUpdate:(nonnull SUAppcastItem *)item error:(nonnull NSError *)error
+{
+    Q_UNUSED(updater)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto errorQstring = QString::fromNSString(error.localizedDescription);
+    const auto message = QObject::tr("Error downloading version %1 update: %2", "%1 is version number, %2 is error message").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Idle
+              displayStatus:message];
+}
+
+- (void)updater:(nonnull SPUUpdater *)updater willExtractUpdate:(nonnull SUAppcastItem *)item
+{
+    Q_UNUSED(updater)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto message = QObject::tr("Extracting version %1 update.", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:message];
+}
+
+- (void)updater:(nonnull SPUUpdater *)updater didExtractUpdate:(nonnull SUAppcastItem *)item
+{
+    Q_UNUSED(updater)
+
+    const auto versionQstring = QString::fromNSString(item.displayVersionString);
+    const auto message = QObject::tr("Extracted version %1 update.", "%1 is version number").arg(versionQstring);
+
+    [self notifyStateChange:OCC::SparkleUpdater::State::Working
+              displayStatus:message];
+}
+
+- (void)userDidCancelDownload:(SPUUpdater *)updater
+{
+    Q_UNUSED(updater);
+    [self notifyStateChange:OCC::SparkleUpdater::State::Idle
+              displayStatus:QObject::tr("Update download cancelled.")];
+}
+
+- (NSString *)feedURLStringForUpdater:(SPUUpdater *)updater
+{
+    Q_UNUSED(updater)
+    return self.feedURLString;
+}
 
 @end
 
 
 namespace OCC {
 
-class SparkleUpdater::Private
-{
-    public:
-        SUUpdater* updater;
-        DelegateObject *delegate;
-};
-
 // Delete ~/Library//Preferences/com.owncloud.desktopclient.plist to re-test
 SparkleUpdater::SparkleUpdater(const QUrl& appCastUrl)
     : Updater()
+    , _interface(std::make_unique<SparkleInterface>(this))
 {
-    d = new Private;
+    _interface->delegate = [[NCSparkleUpdaterDelegate alloc] initWithOwner:_interface.get()];
+    [_interface->delegate retain];
 
-    d->delegate = [[DelegateObject alloc] init];
-    [d->delegate retain];
-
-    d->updater = [SUUpdater sharedUpdater];
-    [d->updater setDelegate:d->delegate];
-    [d->updater setAutomaticallyChecksForUpdates:YES];
-    [d->updater setAutomaticallyDownloadsUpdates:NO];
-    [d->updater setSendsSystemProfile:NO];
-    [d->updater resetUpdateCycle];
-    [d->updater retain];
+    _interface->updaterController =
+        [[SPUStandardUpdaterController alloc] initWithStartingUpdater:YES 
+                                                      updaterDelegate:_interface->delegate
+                                                   userDriverDelegate:nil];
+    [_interface->updaterController retain];
 
     setUpdateUrl(appCastUrl);
 
     // Sparkle 1.8 required
-    NSString *userAgent = [NSString stringWithUTF8String: Utility::userAgentString().data()];
-    [d->updater setUserAgentString: userAgent];
+    const auto userAgentString = QString::fromUtf8(Utility::userAgentString());
+    NSString *const userAgent = userAgentString.toNSString();
+    _interface->updaterController.updater.userAgentString = userAgent;
 }
 
-SparkleUpdater::~SparkleUpdater()
-{
-    [d->updater release];
-    delete d;
-}
+SparkleUpdater::~SparkleUpdater() = default;
 
 void SparkleUpdater::setUpdateUrl(const QUrl &url)
 {
-    NSURL* nsurl = [NSURL URLWithString:
-            [NSString stringWithUTF8String: url.toString().toUtf8().data()]];
-    [d->updater setFeedURL: nsurl];
+    _interface->delegate.feedURLString = url.toNSURL().absoluteString;
 }
 
-// FIXME: Should be changed to not instantiate the SparkleUpdater at all in this case
-bool autoUpdaterAllowed()
+bool SparkleUpdater::autoUpdaterAllowed()
 {
     // See https://github.com/owncloud/client/issues/2931
     NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
@@ -139,27 +290,32 @@ bool autoUpdaterAllowed()
     return true;
 }
 
-
 void SparkleUpdater::checkForUpdate()
 {
-    qCDebug(OCC::lcUpdater) << "Checking for updates.";
+    qCInfo(OCC::lcUpdater) << "Checking for updates.";
     if (autoUpdaterAllowed()) {
-        [d->updater checkForUpdates: NSApp];
+        [_interface->updaterController.updater checkForUpdates];
     }
 }
 
 void SparkleUpdater::backgroundCheckForUpdate()
 {
-    qCDebug(OCC::lcUpdater) << "launching background check";
-    if (autoUpdaterAllowed()) {
-        [d->updater checkForUpdatesInBackground];
+    if (autoUpdaterAllowed() && !ConfigFile().skipUpdateCheck()) {
+        qCInfo(OCC::lcUpdater) << "launching background check";
+        [_interface->updaterController.updater checkForUpdatesInBackground];
+    } else {
+        qCInfo(OCC::lcUpdater) << "not launching background check, auto updater not allowed or update check skipped in config";
     }
 }
 
-QString SparkleUpdater::statusString()
+QString SparkleUpdater::statusString() const
 {
-    // FIXME Show the real state depending on the callbacks
-    return QString();
+    return _statusString;
+}
+
+SparkleUpdater::State SparkleUpdater::state() const
+{
+    return _state;
 }
 
 } // namespace OCC

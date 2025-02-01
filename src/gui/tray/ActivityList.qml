@@ -1,15 +1,24 @@
-import QtQuick 2.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Controls
 
-import Style 1.0
-import com.nextcloud.desktopclient 1.0 as NC
+import Style
+import com.nextcloud.desktopclient as NC
 
 ScrollView {
     id: controlRoot
     property alias model: sortedActivityList.sourceModel
+    property alias count: activityList.count
+    property alias atYBeginning : activityList.atYBeginning
     property bool isFileActivityList: false
     property int iconSize: Style.trayListItemIconSize
     property int delegateHorizontalPadding: 0
+
+    property bool scrollingToTop: false
+
+    function scrollToTop() {
+        // Triggers activation of repeating upward flick timer
+        scrollingToTop = true
+    }
 
     signal openFile(string filePath)
     signal activityItemClicked(int index)
@@ -22,6 +31,9 @@ ScrollView {
 
     data: NC.WheelHandler {
         target: controlRoot.contentItem
+        onWheel: {
+            scrollingToTop = false
+        }
     }
 
     ListView {
@@ -35,6 +47,20 @@ ScrollView {
         spacing: 0
         currentIndex: -1
         interactive: true
+
+        Timer {
+            id: repeatUpFlickTimer
+            interval: Style.activityListScrollToTopTimerInterval
+            running: controlRoot.scrollingToTop
+            repeat: true
+            onTriggered: {
+                if (!activityList.atYBeginning) {
+                    activityList.flick(0, Style.activityListScrollToTopVelocity)
+                } else {
+                    controlRoot.scrollingToTop = false
+                }
+            }
+        }
 
         highlight: Rectangle {
             id: activityHover
@@ -100,13 +126,12 @@ ScrollView {
                 verticalAlignment: Image.AlignVCenter
                 horizontalAlignment: Image.AlignHCenter
                 fillMode: Image.PreserveAspectFit
-                source: "image://svgimage-custom-color/activity.svg/" + palette.midlight
+                source: "image://svgimage-custom-color/activity.svg/" + palette.windowText
             }
 
             EnforcedPlainTextLabel {
                width: parent.width
                text: qsTr("No activities yet")
-               color: palette.midlight
                font.bold: true
                wrapMode: Text.Wrap
                horizontalAlignment: Text.AlignHCenter

@@ -10,6 +10,7 @@
 
 #include "common/syncjournaldb.h"
 #include "common/syncjournalfilerecord.h"
+#include "logger.h"
 
 using namespace OCC;
 
@@ -32,9 +33,12 @@ public:
     }
 
 private slots:
-
     void initTestCase()
     {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
     }
 
     void cleanupTestCase()
@@ -153,7 +157,7 @@ private slots:
         QVERIFY(!record._valid);
 
         record._errorCount = 5;
-        record._chunk = 12;
+        record._chunkUploadV1 = 12;
         record._transferid = 812974891;
         record._size = 12894789147;
         record._modtime = dropMsecs(QDateTime::currentDateTime());
@@ -289,13 +293,13 @@ private slots:
             << "foo bla bar/file"
             << "fo_"
             << "fo_/file";
-        for (const auto& elem : qAsConst(elements)) {
+        for (const auto& elem : std::as_const(elements)) {
             makeEntry(elem);
         }
 
         auto checkElements = [&]() {
             bool ok = true;
-            for (const auto& elem : qAsConst(elements)) {
+            for (const auto& elem : std::as_const(elements)) {
                 SyncJournalFileRecord record;
                 if (!_db.getFileRecord(elem, &record) || !record.isValid()) {
                     qWarning() << "Missing record: " << elem;

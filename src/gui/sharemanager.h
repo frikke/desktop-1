@@ -67,18 +67,20 @@ public:
 
     using Permissions = SharePermissions;
 
+    Q_ENUM(Permissions);
+
     /*
      * Constructor for shares
      */
     explicit Share(AccountPtr account,
-        const QString &id,
-        const QString &owner,
-        const QString &ownerDisplayName,
-        const QString &path,
-        const ShareType shareType,
-        bool isPasswordSet = false,
-        const Permissions permissions = SharePermissionDefault,
-        const ShareePtr shareWith = ShareePtr(nullptr));
+                   const QString &id,
+                   const QString &owner,
+                   const QString &ownerDisplayName,
+                   const QString &path,
+                   const ShareType shareType,
+                   bool isPasswordSet = false,
+                   const Permissions permissions = SharePermissionAll,
+                   const ShareePtr shareWith = ShareePtr(nullptr));
 
     /**
      * The account the share is defined on.
@@ -310,7 +312,6 @@ signals:
     void noteSet();
     void nameSet();
     void labelSet();
-    void hideDownloadSet();
 
 private slots:
     void slotNoteSet(const QJsonDocument &, const QVariant &value);
@@ -387,7 +388,7 @@ public:
      * @param password The password of the share, may be empty
      *
      * On success the signal linkShareCreated is emitted
-     * For older server the linkShareRequiresPassword signal is emitted when it seems appropiate
+     * For older server the linkShareRequiresPassword signal is emitted when it seems appropriate
      * In case of a server error the serverError signal is emitted
      */
     void createLinkShare(const QString &path,
@@ -411,6 +412,23 @@ public:
         const QString shareWith,
         const Share::Permissions permissions,
         const QString &password = "");
+
+        /**
+     * Tell the manager to create and start new UpdateE2eeShareMetadataJob job
+     *
+     * @param fullRemotePath The path of the share relative to the user folder on the server
+     * @param shareType The type of share (TypeUser, TypeGroup, TypeRemote)
+     * @param Permissions The share permissions
+     * @param folderId The id for an E2EE folder
+     * @param password An optional password for a share
+     *
+     * On success the signal shareCreated is emitted
+     * In case of a server error the serverError signal is emitted
+     */
+    void createE2EeShareJob(const QString &fullRemotePath,
+                            const ShareePtr sharee,
+                            const Share::Permissions permissions,
+                            const QString &password = "");
 
     /**
      * Fetch all the shares for path
@@ -441,6 +459,8 @@ private slots:
     void slotLinkShareCreated(const QJsonDocument &reply);
     void slotShareCreated(const QJsonDocument &reply);
     void slotOcsError(int statusCode, const QString &message);
+    void slotCreateE2eeShareJobFinised(int statusCode, const QString &message);
+
 private:
     QSharedPointer<LinkShare> parseLinkShare(const QJsonObject &data);
     QSharedPointer<UserGroupShare> parseUserGroupShare(const QJsonObject &data);

@@ -16,7 +16,7 @@
 #define ACTIVITYDATA_H
 
 #include "syncfileitem.h"
-#include "folder.h"
+#include "syncresult.h"
 #include "account.h"
 
 #include <QtCore>
@@ -44,6 +44,9 @@ class ActivityLink
 
 public:
     static ActivityLink createFomJsonObject(const QJsonObject &obj);
+
+    static constexpr auto WhitelistFolderVerb = "WHITELIST_FOLDER";
+    static constexpr auto BlacklistFolderVerb = "BLACKLIST_FOLDER";
 
 public:
     QString _imageSource;

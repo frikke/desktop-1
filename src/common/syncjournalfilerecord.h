@@ -39,6 +39,7 @@ struct SyncJournalFileLockInfo {
     QString _lockEditorApp;
     qint64 _lockTime = 0;
     qint64 _lockTimeout = 0;
+    QString _lockToken;
 };
 
 /**
@@ -87,6 +88,8 @@ public:
     bool _isShared = false;
     qint64 _lastShareStateFetchedTimestamp = 0;
     bool _sharedByMe = false;
+    bool _isLivePhoto = false;
+    QString _livePhotoFile;
 };
 
 QDebug& operator<<(QDebug &stream, const SyncJournalFileRecord::EncryptionStatus status);
@@ -125,7 +128,7 @@ public:
     QString _file;
     QString _renameTarget;
 
-    /// The last X-Request-ID of the request that failled
+    /// The last X-Request-ID of the request that failed
     QByteArray _requestId;
 
     [[nodiscard]] bool isValid() const;

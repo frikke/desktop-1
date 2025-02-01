@@ -12,13 +12,13 @@
  * for more details.
  */
 
-import QtQml 2.15
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
-import QtGraphicalEffects 1.15
+import QtQml
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Qt5Compat.GraphicalEffects
 
-import Style 1.0
+import Style
 
 RowLayout {
     id: unifiedSearchResultItemDetails
@@ -36,7 +36,7 @@ RowLayout {
     property int sublineFontSize: Style.unifiedSearchResultSublineFontSize
 
     property color titleColor: palette.buttonText
-    property color sublineColor: palette.midlight
+    property color sublineColor: palette.dark
 
 
     Accessible.role: Accessible.ListItem

@@ -1,19 +1,30 @@
 cmake_minimum_required(VERSION 3.16)
-set(CMAKE_CXX_STANDARD 17)
 cmake_policy(SET CMP0071 NEW) # Enable use of QtQuick compiler/generated code
+
+project(client)
+
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Minimum OSX deployment version")
+endif()
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED 17)
+
+include(FeatureSummary)
 
 find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
 if (CLANG_TIDY_EXE)
     set(CMAKE_CXX_CLANG_TIDY ${CLANG_TIDY_EXE} -checks=-*,modernize-use-auto,modernize-use-using,modernize-use-nodiscard,modernize-use-nullptr,modernize-use-override,cppcoreguidelines-pro-type-static-cast-downcast,modernize-use-default-member-init,cppcoreguidelines-pro-type-member-init,cppcoreguidelines-init-variables)
 endif()
 
-project(client)
-
-include(FeatureSummary)
+set(CMAKE_XCODE_ATTRIBUTE_ENABLE_HARDENED_RUNTIME YES)
 
 set(BIN_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 include(${CMAKE_SOURCE_DIR}/NEXTCLOUD.cmake)
+
+set(QT_VERSION_MAJOR "6")
+set(REQUIRED_QT_VERSION "6.8.0")
 
 # CfAPI Shell Extensions
 set( CFAPI_SHELL_EXTENSIONS_LIB_NAME CfApiShellExtensions )
@@ -44,10 +55,16 @@ else()
     set(APPLICATION_REV_DOMAIN_INSTALLER ${APPLICATION_REV_DOMAIN})
 endif()
 
+option( APPLICATION_DISPLAY_LEGACY_IMPORT_DIALOG "Display legacy import dialog" ON )
+
 # For usage in XML files we preprocess
 string(REPLACE "&" "&amp;" APPLICATION_NAME_XML_ESCAPED "${APPLICATION_NAME}")
 string(REPLACE "<" "&lt;" APPLICATION_NAME_XML_ESCAPED "${APPLICATION_NAME_XML_ESCAPED}")
 string(REPLACE ">" "&gt;" APPLICATION_NAME_XML_ESCAPED "${APPLICATION_NAME_XML_ESCAPED}")
+
+string(REPLACE "&" "&amp;" APPLICATION_VENDOR_XML_ESCAPED "${APPLICATION_VENDOR}")
+string(REPLACE "<" "&lt;" APPLICATION_VENDOR_XML_ESCAPED "${APPLICATION_VENDOR_XML_ESCAPED}")
+string(REPLACE ">" "&gt;" APPLICATION_VENDOR_XML_ESCAPED "${APPLICATION_VENDOR_XML_ESCAPED}")
 
 if (NOT DEFINED LINUX_PACKAGE_SHORTNAME)
     set(LINUX_PACKAGE_SHORTNAME "${APPLICATION_SHORTNAME}")
@@ -100,7 +117,8 @@ include(GetGitRevisionDescription)
 get_git_head_revision(GIT_REFSPEC GIT_SHA1)
 
 add_definitions(
-    -DQT_DISABLE_DEPRECATED_BEFORE=0x000000
+    -DQT_DISABLE_DEPRECATED_BEFORE=0x051200
+    -DQT_DEPRECATED_WARNINGS
     -DQT_USE_QSTRINGBUILDER
     -DQT_MESSAGELOGCONTEXT #enable function name and line number in debug output
 )
@@ -130,7 +148,7 @@ if(APPLE AND BUILD_OWNCLOUD_OSX_BUNDLE)
     add_definitions(-DBUILD_OWNCLOUD_OSX_BUNDLE)
 endif()
 
-
+find_package(Qt${QT_MAJOR_VERSION} COMPONENTS Core)
 option(QUICK_COMPILER "Use QtQuick compiler to improve performance" OFF)
 
 # this option removes Http authentication, keychain, shibboleth etc and is intended for
@@ -176,6 +194,9 @@ option(BUILD_GUI "BUILD_GUI" ON)
 # build the tests
 option(BUILD_TESTING "BUILD_TESTING" ON)
 
+# allows to run nextclouddev in parallel to nextcloud + logs
+option(NEXTCLOUD_DEV "NEXTCLOUD_DEV" OFF)
+
 option(ENABLE_CLANG_TIDY "ENABLE_CLANG_TIDY" OFF)
 if(ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
@@ -185,11 +206,6 @@ if(ENABLE_CLANG_TIDY)
 else()
     unset(CLANG_TIDY_EXE)
     unset(CMAKE_CXX_CLANG_TIDY)
-endif()
-
-if (APPLE)
-    # build macOS File Provider module
-    option(BUILD_FILE_PROVIDER_MODULE "BUILD_FILE_PROVIDER_MODULE" OFF)
 endif()
 
 # When this option is enabled, 5xx errors are not added to the blacklist
@@ -219,6 +235,7 @@ if(BUILD_CLIENT)
     find_package(OpenSSL 1.1 REQUIRED )
 
    find_package(ZLIB REQUIRED)
+   find_package(SQLite3 3.9.0 REQUIRED)
 
    if(NOT WIN32 AND NOT APPLE)
       find_package(PkgConfig REQUIRED)
@@ -230,6 +247,43 @@ if(BUILD_CLIENT)
         pkg_check_modules(GLIB2 REQUIRED glib-2.0 IMPORTED_TARGET)
       endif()
    endif()
+endif()
+
+option(BUILD_WITH_WEBENGINE "BUILD_WITH_WEBENGINE" ON)
+if (BUILD_WITH_WEBENGINE)
+    find_package(Qt${QT_VERSION_MAJOR}WebEngineCore ${REQUIRED_QT_VERSION} CONFIG QUIET)
+    if(APPLE)
+        set_package_properties(Qt${QT_VERSION_MAJOR}WebEngineCore PROPERTIES
+            DESCRIPTION "Qt${QT_VERSION_MAJOR} WebEngineCore component."
+            TYPE RECOMMENDED
+        )
+    else()
+        set_package_properties(Qt${QT_VERSION_MAJOR}WebEngineCore PROPERTIES
+            DESCRIPTION "Qt${QT_VERSION_MAJOR} WebEngine component."
+            TYPE REQUIRED
+        )
+    endif()
+
+    find_package(Qt${QT_MAJOR_VERSION}WebEngineWidgets ${REQUIRED_QT_VERSION} CONFIG QUIET)
+    if(APPLE)
+        set_package_properties(Qt${QT_MAJOR_VERSION}WebEngineWidgets PROPERTIES
+            DESCRIPTION "Qt${QT_MAJOR_VERSION} WebEngineWidgets component."
+            TYPE RECOMMENDED
+        )
+    else()
+        set_package_properties(Qt${QT_MAJOR_VERSION}WebEngineWidgets PROPERTIES
+            DESCRIPTION "Qt${QT_MAJOR_VERSION} WebEngineWidgets component."
+            TYPE REQUIRED
+        )
+    endif()
+
+    if(Qt${QT_MAJOR_VERSION}WebEngineCore_FOUND AND Qt${QT_MAJOR_VERSION}WebEngineWidgets_FOUND)
+        message(STATUS "Enable use of Qt6 WebEngine module")
+        set(WITH_WEBENGINE 1)
+    else()
+        unset(WITH_WEBENGINE)
+        message(STATUS "Disable use of Qt6 WebEngine module")
+    endif()
 endif()
 
 if (NOT DEFINED APPLICATION_ICON_NAME)

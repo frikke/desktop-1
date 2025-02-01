@@ -80,6 +80,7 @@ Result<void, QString> VfsSuffix::updateMetadata(const QString &filePath, time_t 
         return {tr("Error updating metadata due to invalid modification time")};
     }
 
+    qCDebug(lcVfsSuffix()) << "setModTime" << filePath << modtime;
     FileSystem::setModTime(filePath, modtime);
     return {};
 }
@@ -94,13 +95,13 @@ Result<void, QString> VfsSuffix::createPlaceholder(const SyncFileItem &item)
     QString fn = _setupParams.filesystemPath + item._file;
     if (!fn.endsWith(fileSuffix())) {
         ASSERT(false, "vfs file isn't ending with suffix");
-        return QString("vfs file isn't ending with suffix");
+        return QStringLiteral("vfs file isn't ending with suffix");
     }
 
     QFile file(fn);
     if (file.exists() && file.size() > 1
         && !FileSystem::verifyFileUnchanged(fn, item._size, item._modtime)) {
-        return QString("Cannot create a placeholder because a file with the placeholder name already exist");
+        return QStringLiteral("Cannot create a placeholder because a file with the placeholder name already exist");
     }
 
     if (!file.open(QFile::ReadWrite | QFile::Truncate))
@@ -108,6 +109,7 @@ Result<void, QString> VfsSuffix::createPlaceholder(const SyncFileItem &item)
 
     file.write(" ");
     file.close();
+    qCDebug(lcVfsSuffix()) << "setModTime" << fn << item._modtime;
     FileSystem::setModTime(fn, item._modtime);
     return {};
 }
@@ -138,7 +140,7 @@ Result<void, QString> VfsSuffix::dehydratePlaceholder(const SyncFileItem &item)
     return {};
 }
 
-Result<Vfs::ConvertToPlaceholderResult, QString> VfsSuffix::convertToPlaceholder(const QString &, const SyncFileItem &, const QString &)
+Result<Vfs::ConvertToPlaceholderResult, QString> VfsSuffix::convertToPlaceholder(const QString &, const SyncFileItem &, const QString &, UpdateMetadataTypes)
 {
     // Nothing necessary
     return Vfs::ConvertToPlaceholderResult::Ok;
@@ -148,8 +150,7 @@ bool VfsSuffix::isDehydratedPlaceholder(const QString &filePath)
 {
     if (!filePath.endsWith(fileSuffix()))
         return false;
-    QFileInfo fi(filePath);
-    return fi.exists() && fi.size() == 1;
+    return FileSystem::fileExists(filePath) && FileSystem::getSize(filePath) == 1;
 }
 
 bool VfsSuffix::statTypeVirtualFile(csync_file_stat_t *stat, void *)
@@ -167,8 +168,9 @@ bool VfsSuffix::setPinState(const QString &folderPath, PinState state)
     return setPinStateInDb(folderPath, state);
 }
 
-Vfs::AvailabilityResult VfsSuffix::availability(const QString &folderPath)
+Vfs::AvailabilityResult VfsSuffix::availability(const QString &folderPath, const AvailabilityRecursivity recursiveCheck)
 {
+    Q_UNUSED(recursiveCheck)
     return availabilityInDb(folderPath);
 }
 

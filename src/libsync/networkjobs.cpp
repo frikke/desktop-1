@@ -44,12 +44,14 @@
 
 #include "creds/abstractcredentials.h"
 #include "creds/httpcredentials.h"
+#include "configfile.h"
 
 namespace OCC {
 
 Q_LOGGING_CATEGORY(lcEtagJob, "nextcloud.sync.networkjob.etag", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcLsColJob, "nextcloud.sync.networkjob.lscol", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcCheckServerJob, "nextcloud.sync.networkjob.checkserver", QtInfoMsg)
+Q_LOGGING_CATEGORY(lcCheckRedirectCostFreeUrlJob, "nextcloud.sync.networkjob.checkredirectcostfreeurl", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcPropfindJob, "nextcloud.sync.networkjob.propfind", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcAvatarJob, "nextcloud.sync.networkjob.avatar", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcMkColJob, "nextcloud.sync.networkjob.mkcol", QtInfoMsg)
@@ -278,21 +280,21 @@ bool LsColXMLParser::parse(const QByteArray &xml, QHash<QString, ExtraFolderInfo
         // End elements with DAV:
         if (type == QXmlStreamReader::EndElement) {
             if (reader.namespaceUri() == QLatin1String("DAV:")) {
-                if (reader.name() == "response") {
+                if (reader.name() == QStringLiteral("response")) {
                     if (currentHref.endsWith('/')) {
                         currentHref.chop(1);
                     }
                     emit directoryListingIterated(currentHref, currentHttp200Properties);
                     currentHref.clear();
                     currentHttp200Properties.clear();
-                } else if (reader.name() == "propstat") {
+                } else if (reader.name() == QStringLiteral("propstat")) {
                     insidePropstat = false;
                     if (currentPropsHaveHttp200) {
                         currentHttp200Properties = QMap<QString, QString>(currentTmpProperties);
                     }
                     currentTmpProperties.clear();
                     currentPropsHaveHttp200 = false;
-                } else if (reader.name() == "prop") {
+                } else if (reader.name() == QStringLiteral("prop")) {
                     insideProp = false;
                 }
             }
@@ -315,13 +317,13 @@ bool LsColXMLParser::parse(const QByteArray &xml, QHash<QString, ExtraFolderInfo
 
 /*********************************************************************************************/
 
-LsColJob::LsColJob(AccountPtr account, const QString &path, QObject *parent)
-    : AbstractNetworkJob(account, path, parent)
+LsColJob::LsColJob(AccountPtr account, const QString &path)
+    : AbstractNetworkJob(account, path)
 {
 }
 
-LsColJob::LsColJob(AccountPtr account, const QUrl &url, QObject *parent)
-    : AbstractNetworkJob(account, QString(), parent)
+LsColJob::LsColJob(AccountPtr account, const QUrl &url)
+    : AbstractNetworkJob(account, QString())
     , _url(url)
 {
 }
@@ -402,6 +404,13 @@ bool LsColJob::finished()
         connect(&parser, &LsColXMLParser::finishedWithoutError,
             this, &LsColJob::finishedWithoutError);
 
+        // bool LsColXMLParser::parse takes a while, let's process some events in attempt to make UI more responsive
+        // from https://doc.qt.io/qt-5/qcoreapplication.html#processEvents-1 
+        // "You can call this function occasionally when your program is busy doing a long operation (e.g. copying a file)."
+        // we should not abuse this function, as it affects QObject instances lifetime (when children are getting deleted or when deleteLater is called)
+        // one reason I had to remove ability for LsColJob to have parent, which, otherwise, leads to a crash later
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 100);
+
         QString expectedPath = reply()->request().url().path(); // something like "/owncloud/remote.php/dav/folder"
         if (!parser.parse(reply()->readAll(), &_folderInfos, expectedPath)) {
             // XML parse error
@@ -412,7 +421,10 @@ bool LsColJob::finished()
         emit finishedWithError(reply());
     }
 
-    return true;
+    this->deleteLater();
+
+    // fix crash on random deletion mess in the parent class, we never discard this job but always delete it inside this method
+    return false;
 }
 
 /*********************************************************************************************/
@@ -554,6 +566,42 @@ bool CheckServerJob::finished()
 
 /*********************************************************************************************/
 
+CheckRedirectCostFreeUrlJob::CheckRedirectCostFreeUrlJob(const AccountPtr &account, QObject *parent)
+    : AbstractNetworkJob(account, QLatin1String(statusphpC), parent)
+{
+    setIgnoreCredentialFailure(true);
+}
+
+void CheckRedirectCostFreeUrlJob::start()
+{
+    setFollowRedirects(false);
+    sendRequest("GET", Utility::concatUrlPath(account()->url(), QStringLiteral("/index.php/204")));
+    AbstractNetworkJob::start();
+}
+
+void CheckRedirectCostFreeUrlJob::onTimedOut()
+{
+    qCDebug(lcCheckRedirectCostFreeUrlJob) << "TIMEOUT";
+    if (reply() && reply()->isRunning()) {
+        emit timeout(reply()->url());
+    } else if (!reply()) {
+        qCDebug(lcCheckRedirectCostFreeUrlJob) << "Timeout without a reply?";
+    }
+    AbstractNetworkJob::onTimedOut();
+}
+
+bool CheckRedirectCostFreeUrlJob::finished()
+{
+    const auto statusCode = reply()->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    if (statusCode >= 301 && statusCode <= 307) {
+        const auto redirectionTarget = reply()->attribute(QNetworkRequest::RedirectionTargetAttribute).toUrl();
+        qCDebug(lcCheckRedirectCostFreeUrlJob) << "Redirecting cost-free URL" << reply()->url() << " to" << redirectionTarget;
+    }
+    emit jobFinished(statusCode);
+    return true;
+}
+/*********************************************************************************************/
+
 PropfindJob::PropfindJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
@@ -615,12 +663,9 @@ bool PropfindJob::finished()
     if (http_result_code == 207) {
         // Parse DAV response
         auto domDocument = QDomDocument();
-        auto errorMsg = QString();
-        auto errorLine = -1;
-        auto errorColumn = -1;
 
-        if (!domDocument.setContent(reply(), true, &errorMsg, &errorLine, &errorColumn)) {
-            qCWarning(lcPropfindJob) << "XML parser error: " << errorMsg << errorLine << errorColumn;
+        if (const auto res = domDocument.setContent(reply(), QDomDocument::ParseOption::UseNamespaceProcessing); !res) {
+            qCWarning(lcPropfindJob) << "XML parser error: " << res.errorMessage << res.errorLine << res.errorColumn;
             emit finishedWithError(reply());
 
         } else {
@@ -748,9 +793,9 @@ AvatarJob::AvatarJob(AccountPtr account, const QString &userId, int size, QObjec
     : AbstractNetworkJob(account, QString(), parent)
 {
     if (account->serverVersionInt() >= Account::makeServerVersion(10, 0, 0)) {
-        _avatarUrl = Utility::concatUrlPath(account->url(), QString("remote.php/dav/avatars/%1/%2.png").arg(userId, QString::number(size)));
+        _avatarUrl = Utility::concatUrlPath(account->url(), QStringLiteral("remote.php/dav/avatars/%1/%2.png").arg(userId, QString::number(size)));
     } else {
-        _avatarUrl = Utility::concatUrlPath(account->url(), QString("index.php/avatar/%1/%2").arg(userId, QString::number(size)));
+        _avatarUrl = Utility::concatUrlPath(account->url(), QStringLiteral("index.php/avatar/%1/%2").arg(userId, QString::number(size)));
     }
 }
 
@@ -799,7 +844,7 @@ bool AvatarJob::finished()
             }
         }
     }
-    emit(avatarPixmap(avImage));
+    emit avatarPixmap(avImage);
     return true;
 }
 #endif
@@ -954,8 +999,9 @@ bool JsonApiJob::finished()
     }
 
     // save new ETag value
-    if(reply()->rawHeaderList().contains("ETag"))
-        emit etagResponseHeaderReceived(reply()->rawHeader("ETag"), statusCode);
+    if (const auto etagHeader = reply()->header(QNetworkRequest::ETagHeader); etagHeader.isValid()) {
+        emit etagResponseHeaderReceived(etagHeader.toByteArray(), statusCode);
+    }
 
     QJsonParseError error{};
     auto json = QJsonDocument::fromJson(jsonStr.toUtf8(), &error);
@@ -975,6 +1021,7 @@ DetermineAuthTypeJob::DetermineAuthTypeJob(AccountPtr account, QObject *parent)
     : QObject(parent)
     , _account(account)
 {
+    useFlow2 = ConfigFile().forceLoginV2();
 }
 
 void DetermineAuthTypeJob::start()
@@ -1019,16 +1066,13 @@ void DetermineAuthTypeJob::start()
     });
     connect(propfind, &SimpleNetworkJob::finishedSignal, this, [this](QNetworkReply *reply) {
         auto authChallenge = reply->rawHeader("WWW-Authenticate").toLower();
-        if (authChallenge.contains("bearer ")) {
-            _resultPropfind = OAuth;
+
+        if (authChallenge.isEmpty()) {
+            qCWarning(lcDetermineAuthTypeJob) << "Did not receive WWW-Authenticate reply to auth-test PROPFIND";
         } else {
-            if (authChallenge.isEmpty()) {
-                qCWarning(lcDetermineAuthTypeJob) << "Did not receive WWW-Authenticate reply to auth-test PROPFIND";
-            } else {
-                qCWarning(lcDetermineAuthTypeJob) << "Unknown WWW-Authenticate reply to auth-test PROPFIND:" << authChallenge;
-            }
-            _resultPropfind = Basic;
+            qCWarning(lcDetermineAuthTypeJob) << "Unknown WWW-Authenticate reply to auth-test PROPFIND:" << authChallenge;
         }
+        _resultPropfind = Basic;
         _propfindDone = true;
         checkAllDone();
     });
@@ -1043,7 +1087,11 @@ void DetermineAuthTypeJob::start()
                 if (flow != QJsonValue::Undefined) {
                     if (flow.toInt() == 1) {
 #ifdef WITH_WEBENGINE
-                        _resultOldFlow = WebViewFlow;
+                        if(!this->useFlow2) {
+                            _resultOldFlow = WebViewFlow;
+                        } else {
+                            qCWarning(lcDetermineAuthTypeJob) << "Server only supports flow1, but this client was configured to only use flow2";
+                        }
 #else // WITH_WEBENGINE
                         qCWarning(lcDetermineAuthTypeJob) << "Server does only support flow1, but this client was compiled without support for flow1";
 #endif // WITH_WEBENGINE
@@ -1074,13 +1122,16 @@ void DetermineAuthTypeJob::checkAllDone()
     auto result = _resultPropfind;
 
 #ifdef WITH_WEBENGINE
-    // WebViewFlow > OAuth > Basic
+    // WebViewFlow > Basic
     if (_account->serverVersionInt() >= Account::makeServerVersion(12, 0, 0)) {
         result = WebViewFlow;
+        if (useFlow2) {
+            result = LoginFlowV2;
+        }
     }
 #endif // WITH_WEBENGINE
 
-    // LoginFlowV2 > WebViewFlow > OAuth > Basic
+    // LoginFlowV2 > WebViewFlow > Basic
     if (_account->serverVersionInt() >= Account::makeServerVersion(16, 0, 0)) {
         result = LoginFlowV2;
     }
@@ -1089,6 +1140,9 @@ void DetermineAuthTypeJob::checkAllDone()
     // If we determined that we need the webview flow (GS for example) then we switch to that
     if (_resultOldFlow == WebViewFlow) {
         result = WebViewFlow;
+        if (useFlow2) {
+            result = LoginFlowV2;
+        }
     }
 #endif // WITH_WEBENGINE
 

@@ -32,11 +32,8 @@
 #include <QNetworkAccessManager>
 #include <QFileInfo>
 #include <QDir>
-#include <cmath>
 
-#ifdef Q_OS_UNIX
-#include <unistd.h>
-#endif
+#include <cmath>
 
 namespace OCC {
 
@@ -163,7 +160,7 @@ void GETFileJob::slotMetaDataChanged()
 
     if (httpStatus == 301 || httpStatus == 302 || httpStatus == 303 || httpStatus == 307
         || httpStatus == 308 || httpStatus == 401) {
-        // Redirects and auth failures (oauth token renew) are handled by AbstractNetworkJob and
+        // Redirects and auth failures (token renew) are handled by AbstractNetworkJob and
         // will end up restarting the job. We do not want to process further data from the initial
         // request. newReplyHook() will reestablish signal connections for the follow-up request.
         bool ok = disconnect(reply(), &QNetworkReply::finished, this, &GETFileJob::slotReadyRead)
@@ -321,7 +318,7 @@ void GETFileJob::slotReadyRead()
             return;
         }
 
-        const qint64 writtenBytes = writeToDevice(QByteArray::fromRawData(buffer.constData(), readBytes));
+        const qint64 writtenBytes = writeToDevice(buffer.left(readBytes));
         if (writtenBytes != readBytes) {
             _errorString = _device->errorString();
             _errorStatus = SyncFileItem::NormalError;
@@ -332,7 +329,7 @@ void GETFileJob::slotReadyRead()
     }
 
     if (reply()->isFinished() && (reply()->bytesAvailable() == 0 || !_saveBodyToFile)) {
-        qCDebug(lcGetJob) << "Actually finished!";
+        qCDebug(lcGetJob) << "Get file job finished bytesAvailable/_saveBodyToFile:" << reply()->bytesAvailable() << "/" << _saveBodyToFile ;
         if (_bandwidthManager) {
             _bandwidthManager->unregisterDownloadJob(this);
         }
@@ -379,7 +376,7 @@ QString GETFileJob::errorString() const
 
 GETEncryptedFileJob::GETEncryptedFileJob(AccountPtr account, const QString &path, QIODevice *device,
     const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
-    qint64 resumeStart, EncryptedFile encryptedInfo, QObject *parent)
+    qint64 resumeStart, FolderMetadata::EncryptedFile encryptedInfo, QObject *parent)
     : GETFileJob(account, path, device, headers, expectedEtagForResume, resumeStart, parent)
     , _encryptedFileInfo(encryptedInfo)
 {
@@ -387,7 +384,7 @@ GETEncryptedFileJob::GETEncryptedFileJob(AccountPtr account, const QString &path
 
 GETEncryptedFileJob::GETEncryptedFileJob(AccountPtr account, const QUrl &url, QIODevice *device,
     const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
-    qint64 resumeStart, EncryptedFile encryptedInfo, QObject *parent)
+    qint64 resumeStart, FolderMetadata::EncryptedFile encryptedInfo, QObject *parent)
     : GETFileJob(account, url, device, headers, expectedEtagForResume, resumeStart, parent)
     , _encryptedFileInfo(encryptedInfo)
 {
@@ -460,8 +457,8 @@ void PropagateDownloadFile::start()
 
     SyncJournalFileRecord parentRec;
     if (!propagator()->_journal->getFileRecord(parentPath, &parentRec)) {
-        qCWarning(lcPropagateDownload) << "could not get file from local DB" << parentPath;
-        done(SyncFileItem::NormalError, tr("could not get file %1 from local DB").arg(parentPath), ErrorCategory::GenericError);
+        qCWarning(lcPropagateDownload) << "Could not get file from local DB" << parentPath;
+        done(SyncFileItem::NormalError, tr("Could not get file %1 from local DB").arg(parentPath), ErrorCategory::GenericError);
         return;
     }
 
@@ -501,6 +498,13 @@ void PropagateDownloadFile::startAfterIsEncryptedIsChecked()
         }
 
         qCDebug(lcPropagateDownload) << "dehydrating file" << _item->_file;
+        if (FileSystem::isLnkFile(fsPath)) {
+            const auto convertResult = vfs->convertToPlaceholder(fsPath, *_item);
+            if (!convertResult) {
+                qCCritical(lcPropagateDownload()) << "error when converting a shortcut file to placeholder" << convertResult.error();
+            }
+        }
+
         auto r = vfs->dehydratePlaceholder(*_item);
         if (!r) {
             done(SyncFileItem::NormalError, r.error(), ErrorCategory::GenericError);
@@ -606,6 +610,7 @@ void PropagateDownloadFile::conflictChecksumComputed(const QByteArray &checksumT
         }
         if (_item->_modtime != _item->_previousModtime) {
             Q_ASSERT(_item->_modtime > 0);
+            qCDebug(lcPropagateDownload()) << "setModTime" << fn << _item->_modtime;
             FileSystem::setModTime(fn, _item->_modtime);
             emit propagator()->touchedFile(fn);
         }
@@ -671,8 +676,36 @@ void PropagateDownloadFile::startDownload()
 
     // Can't open(Append) read-only files, make sure to make
     // file writable if it exists.
-    if (_tmpFile.exists())
+    if (_tmpFile.exists()) {
         FileSystem::setFileReadOnly(_tmpFile.fileName(), false);
+    }
+
+#if !defined(Q_OS_MACOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15
+    try {
+        const auto newDirPath = std::filesystem::path{_tmpFile.fileName().toStdWString()};
+        Q_ASSERT(newDirPath.has_parent_path());
+        _parentPath = newDirPath.parent_path();
+    }
+    catch (const std::filesystem::filesystem_error &e)
+    {
+        qCWarning(lcPropagateDownload) << "exception when checking parent folder access rights" << e.what() << e.path1().c_str() << e.path2().c_str();
+    }
+    catch (const std::system_error &e)
+    {
+        qCWarning(lcPropagateDownload) << "exception when checking parent folder access rights" << e.what();
+    }
+    catch (...)
+    {
+        qCWarning(lcPropagateDownload) << "exception when checking parent folder access rights";
+    }
+
+    if (FileSystem::isFolderReadOnly(_parentPath)) {
+        FileSystem::setFolderPermissions(QString::fromStdWString(_parentPath.wstring()), FileSystem::FolderPermissions::ReadWrite);
+        emit propagator()->touchedFile(QString::fromStdWString(_parentPath.wstring()));
+        _needParentFolderRestorePermissions = true;
+    }
+#endif
+
     if (!_tmpFile.open(QIODevice::Append | QIODevice::Unbuffered)) {
         qCWarning(lcPropagateDownload) << "could not open temporary file" << _tmpFile.fileName();
         done(SyncFileItem::NormalError, _tmpFile.errorString(), ErrorCategory::GenericError);
@@ -869,8 +902,7 @@ void PropagateDownloadFile::slotGetFinished()
     // of the compressed data. See QTBUG-73364.
     const auto contentEncoding = job->reply()->rawHeader("content-encoding").toLower();
     if ((contentEncoding == "gzip" || contentEncoding == "deflate")
-        && (job->reply()->attribute(QNetworkRequest::Http2WasUsedAttribute).toBool()
-         || job->reply()->attribute(QNetworkRequest::SpdyWasUsedAttribute).toBool())) {
+        && job->reply()->attribute(QNetworkRequest::Http2WasUsedAttribute).toBool()) {
         bodySize = 0;
         hasSizeHeader = false;
     }
@@ -990,7 +1022,7 @@ void PropagateDownloadFile::checksumValidateFailedAbortDownload(const QString &e
 void PropagateDownloadFile::deleteExistingFolder()
 {
     QString existingDir = propagator()->fullLocalPath(_item->_file);
-    if (!QFileInfo(existingDir).isDir()) {
+    if (!FileSystem::isDir(existingDir)) {
         return;
     }
 
@@ -1076,7 +1108,7 @@ namespace { // Anonymous namespace for the recall feature
         int chownErr = chown(fileName.toLocal8Bit().constData(), -1, fi.groupId());
         if (chownErr) {
             // TODO: Consider further error handling!
-            qCWarning(lcPropagateDownload) << QString("preserveGroupOwnership: chown error %1: setting group %2 failed on file %3").arg(chownErr).arg(fi.groupId()).arg(fileName);
+            qCWarning(lcPropagateDownload) << QStringLiteral("preserveGroupOwnership: chown error %1: setting group %2 failed on file %3").arg(chownErr).arg(fi.groupId()).arg(fileName);
         }
 #else
         Q_UNUSED(fileName);
@@ -1114,7 +1146,8 @@ void PropagateDownloadFile::contentChecksumComputed(const QByteArray &checksumTy
     SyncJournalFileRecord record;
     if (_item->_instruction != CSYNC_INSTRUCTION_CONFLICT && FileSystem::fileExists(localFilePath)
         && (propagator()->_journal->getFileRecord(_item->_file, &record) && record.isValid())
-        && (record._modtime == _item->_modtime && record._etag != _item->_etag)) {
+        && (record._modtime == _item->_modtime && record._etag != _item->_etag)
+        && _item->_type == ItemTypeFile) {
         const auto computeChecksum = new ComputeChecksum(this);
         computeChecksum->setChecksumType(checksumType);
         connect(computeChecksum, &ComputeChecksum::done, this, &PropagateDownloadFile::localFileContentChecksumComputed);
@@ -1162,6 +1195,7 @@ void PropagateDownloadFile::downloadFinished()
     if (_item->_modtime <= 0) {
         qCWarning(lcPropagateDownload()) << "invalid modified time" << _item->_file << _item->_modtime;
     }
+    qCDebug(lcPropagateDownload()) << "setModTime" << _tmpFile.fileName() << _item->_modtime;
     FileSystem::setModTime(_tmpFile.fileName(), _item->_modtime);
     // We need to fetch the time again because some file systems such as FAT have worse than a second
     // Accuracy, and we really need the time from the file system. (#3103)
@@ -1185,9 +1219,31 @@ void PropagateDownloadFile::downloadFinished()
     if (previousFileExists) {
         // Preserve the existing file permissions.
         const auto existingFile = QFileInfo{filename};
+#ifdef Q_OS_WIN
+        try {
+            const auto existingPermissions = FileSystem::filePermissionsWin(filename);
+            const auto tmpFilePermissions = FileSystem::filePermissionsWin(_tmpFile.fileName());
+            if (existingPermissions != tmpFilePermissions) {
+                FileSystem::setFilePermissionsWin(_tmpFile.fileName(), existingPermissions);
+            }
+        }
+        catch (const std::filesystem::filesystem_error &e)
+        {
+            qCWarning(lcPropagateDownload()) << _item->_instruction << _item->_file << e.what();
+        }
+        catch (const std::system_error &e)
+        {
+            qCWarning(lcPropagateDownload()) << _item->_instruction << _item->_file << e.what();
+        }
+        catch (...)
+        {
+            qCWarning(lcPropagateDownload()) << _item->_instruction << _item->_file;
+        }
+#else
         if (existingFile.permissions() != _tmpFile.permissions()) {
             _tmpFile.setPermissions(existingFile.permissions());
         }
+#endif
         preserveGroupOwnership(_tmpFile.fileName(), existingFile);
 
         // Make the file a hydrated placeholder if possible
@@ -1198,11 +1254,18 @@ void PropagateDownloadFile::downloadFinished()
         }
     }
 
-    // Apply the remote permissions
-    FileSystem::setFileReadOnlyWeak(_tmpFile.fileName(), !_item->_remotePerm.isNull() && !_item->_remotePerm.hasPermission(RemotePermissions::CanWrite));
+    if (_item->_locked == SyncFileItem::LockStatus::LockedItem && (_item->_lockOwnerType != SyncFileItem::LockOwnerType::UserLock || _item->_lockOwnerId != propagator()->account()->davUser())) {
+        qCDebug(lcPropagateDownload()) << _tmpFile.fileName() << "file is locked: making it read only";
+        FileSystem::setFileReadOnly(_tmpFile.fileName(), true);
+    } else {
+        qCDebug(lcPropagateDownload()) << _tmpFile.fileName() << "file is not locked: making it"
+                                       << ((!_item->_remotePerm.isNull() && !_item->_remotePerm.hasPermission(RemotePermissions::CanWrite)) ? "read only"
+                                                                                                                                            : "read write");
+        FileSystem::setFileReadOnlyWeak(_tmpFile.fileName(), (!_item->_remotePerm.isNull() && !_item->_remotePerm.hasPermission(RemotePermissions::CanWrite)));
+    }
 
     const auto isConflict = (_item->_instruction == CSYNC_INSTRUCTION_CONFLICT
-                             && (QFileInfo(filename).isDir() || !FileSystem::fileEquals(filename, _tmpFile.fileName()))) ||
+                             && (FileSystem::isDir(filename) || !FileSystem::fileEquals(filename, _tmpFile.fileName()))) ||
         _item->_instruction == CSYNC_INSTRUCTION_CASE_CLASH_CONFLICT;
 
     if (isConflict) {
@@ -1219,6 +1282,7 @@ void PropagateDownloadFile::downloadFinished()
             QString error;
             if (!propagator()->createConflict(_item, _associatedComposite, &error)) {
                 done(SyncFileItem::SoftError, error, ErrorCategory::GenericError);
+                return;
             } else {
                 previousFileExists = false;
             }
@@ -1249,7 +1313,7 @@ void PropagateDownloadFile::downloadFinished()
     emit propagator()->touchedFile(filename);
     // The fileChanged() check is done above to generate better error messages.
     if (!FileSystem::uncheckedRenameReplace(_tmpFile.fileName(), filename, &error)) {
-        qCWarning(lcPropagateDownload) << QString("Rename failed: %1 => %2").arg(_tmpFile.fileName()).arg(filename);
+        qCWarning(lcPropagateDownload) << QStringLiteral("Rename failed: %1 => %2").arg(_tmpFile.fileName()).arg(filename);
         // If the file is locked, we want to retry this sync when it
         // becomes available again, otherwise try again directly
         if (FileSystem::isFileLocked(filename)) {
@@ -1262,11 +1326,13 @@ void PropagateDownloadFile::downloadFinished()
         return;
     }
 
-    qCInfo(lcPropagateDownload()) << propagator()->account()->davUser() << propagator()->account()->davDisplayName() << propagator()->account()->displayName();
-    if (_item->_locked == SyncFileItem::LockStatus::LockedItem && (_item->_lockOwnerType != SyncFileItem::LockOwnerType::UserLock || _item->_lockOwnerId != propagator()->account()->davUser())) {
-        qCInfo(lcPropagateDownload()) << "file is locked: making it read only";
-        FileSystem::setFileReadOnly(filename, true);
+#if !defined(Q_OS_MACOS) || __MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_15
+    if (_needParentFolderRestorePermissions) {
+        FileSystem::setFolderPermissions(QString::fromStdWString(_parentPath.wstring()), FileSystem::FolderPermissions::ReadWrite);
+        emit propagator()->touchedFile(QString::fromStdWString(_parentPath.wstring()));
+        _needParentFolderRestorePermissions = false;
     }
+#endif
 
     FileSystem::setFileHidden(filename, false);
 
@@ -1344,6 +1410,19 @@ void PropagateDownloadFile::updateMetadata(bool isConflict)
         && (_item->_file == QLatin1String(".sys.admin#recall#")
                || _item->_file.endsWith(QLatin1String("/.sys.admin#recall#")))) {
         handleRecallFile(fn, propagator()->localPath(), *propagator()->_journal);
+    }
+
+    const auto isLockOwnedByCurrentUser = _item->_lockOwnerId == propagator()->account()->davUser();
+
+    const auto isUserLockOwnedByCurrentUser = (_item->_lockOwnerType == SyncFileItem::LockOwnerType::UserLock && isLockOwnedByCurrentUser);
+    const auto isTokenLockOwnedByCurrentUser = (_item->_lockOwnerType == SyncFileItem::LockOwnerType::TokenLock && isLockOwnedByCurrentUser);
+
+    if (_item->_locked == SyncFileItem::LockStatus::LockedItem && !isUserLockOwnedByCurrentUser && !isTokenLockOwnedByCurrentUser) {
+        qCDebug(lcPropagateDownload()) << fn << "file is locked: making it read only";
+        FileSystem::setFileReadOnly(fn, true);
+    } else {
+        qCDebug(lcPropagateDownload()) << fn << "file is not locked: making it" << ((!_item->_remotePerm.isNull() && !_item->_remotePerm.hasPermission(RemotePermissions::CanWrite)) ? "read only" : "read write");
+        FileSystem::setFileReadOnlyWeak(fn, (!_item->_remotePerm.isNull() && !_item->_remotePerm.hasPermission(RemotePermissions::CanWrite)));
     }
 
     qint64 duration = _stopwatch.elapsed();

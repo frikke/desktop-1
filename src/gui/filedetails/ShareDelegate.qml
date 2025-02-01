@@ -12,14 +12,14 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Window 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
-import QtGraphicalEffects 1.15
+import QtQuick
+import QtQuick.Window
+import QtQuick.Layouts
+import QtQuick.Controls
+import Qt5Compat.GraphicalEffects
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 import "../tray"
 import "../"
 
@@ -50,8 +50,10 @@ GridLayout {
     property FileDetails fileDetails: FileDetails {}
     property StackView rootStackView: StackView {}
     property bool backgroundsVisible: true
+    property color accentColor: Style.ncBlue
 
     property bool canCreateLinkShares: true
+    property bool serverAllowsResharing: true
 
     readonly property bool isLinkShare: model.shareType === ShareModel.ShareTypeLink
     readonly property bool isPlaceholderLinkShare: model.shareType === ShareModel.ShareTypePlaceholderLink
@@ -88,7 +90,7 @@ GridLayout {
             id: backgroundOrMask
             anchors.fill: parent
             radius: width / 2
-            color: Style.ncBlue
+            color: root.accentColor
             visible: !imageItem.isAvatar
         }
 
@@ -138,7 +140,6 @@ GridLayout {
         Layout.column: 1
 
         text: root.detailText
-        color: palette.midlight
         elide: Text.ElideRight
         visible: text !== ""
     }
@@ -151,21 +152,17 @@ GridLayout {
 
         spacing: 0
 
-        CustomButton {
+        Button {
             id: createLinkButton
 
             Layout.alignment: Qt.AlignCenter
-            Layout.preferredWidth: Style.iconButtonWidth
-            Layout.preferredHeight: width
-
-            toolTipText: qsTr("Create a new share link")
-
-            bgColor: palette.highlight
-            bgNormalOpacity: 0
+            Layout.preferredWidth: Style.activityListButtonWidth
+            Layout.preferredHeight: Style.activityListButtonHeight
 
             icon.source: "image://svgimage-custom-color/add.svg/" + palette.buttonText
-            icon.width: Style.smallIconSize
-            icon.height: Style.smallIconSize
+            icon.width: Style.activityListButtonIconSize
+            icon.height: Style.activityListButtonIconSize
+            display: AbstractButton.IconOnly
 
             visible: (root.isPlaceholderLinkShare || root.isSecureFileDropPlaceholderLinkShare) && root.canCreateLinkShares
             enabled: visible
@@ -173,7 +170,7 @@ GridLayout {
             onClicked: root.createNewLinkShare()
         }
 
-        CustomButton {
+        Button {
             id: copyLinkButton
 
             function copyShareLink() {
@@ -188,35 +185,20 @@ GridLayout {
 
             property bool shareLinkCopied: false
 
-            Layout.alignment: Qt.AlignCenter
-            Layout.preferredWidth: shareLinkCopied ? implicitWidth : Style.iconButtonWidth
-            Layout.preferredHeight: Style.iconButtonWidth
-
-            toolTipText: qsTr("Copy share link location")
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+            Layout.preferredWidth: shareLinkCopied ? implicitWidth : Style.activityListButtonWidth
+            Layout.preferredHeight: Style.activityListButtonHeight
 
             text: shareLinkCopied ? qsTr("Copied!") : ""
-            textColor: palette.brightText
-            contentsFont.bold: true
-            bgColor: shareLinkCopied ? Style.positiveColor : palette.highlight
-            bgNormalOpacity: shareLinkCopied ? 1 : 0
 
             icon.source: shareLinkCopied ? "image://svgimage-custom-color/copy.svg/" + palette.brightText :
                                            "image://svgimage-custom-color/copy.svg/" + palette.buttonText
-            icon.width: Style.smallIconSize
-            icon.height: Style.smallIconSize
-
+            icon.width: Style.activityListButtonIconSize
+            icon.height: Style.activityListButtonIconSize
+            display: AbstractButton.IconOnly
             visible: root.isLinkShare || root.isInternalLinkShare
             enabled: visible
-
             onClicked: copyShareLink()
-
-            Behavior on bgColor {
-                ColorAnimation { duration: Style.shortAnimationDuration }
-            }
-
-            Behavior on bgNormalOpacity {
-                NumberAnimation { duration: Style.shortAnimationDuration }
-            }
 
             Behavior on Layout.preferredWidth {
                 SmoothedAnimation { duration: Style.shortAnimationDuration }
@@ -234,25 +216,19 @@ GridLayout {
             }
         }
 
-        CustomButton {
+        Button {
             id: moreButton
 
-            Layout.alignment: Qt.AlignCenter
-            Layout.preferredWidth: Style.iconButtonWidth
-            Layout.preferredHeight: width
-
-            toolTipText: qsTr("Share options")
-
-            bgColor: palette.highlight
-            bgNormalOpacity: 0
+            Layout.alignment: Qt.AlignVCenter | Qt.AlignHCenter
+            Layout.preferredWidth: Style.activityListButtonWidth
+            Layout.preferredHeight: Style.activityListButtonHeight
 
             icon.source: "image://svgimage-custom-color/more.svg/" + palette.buttonText
-            icon.width: Style.smallIconSize
-            icon.height: Style.smallIconSize
-
+            icon.width: Style.activityListButtonIconSize
+            icon.height: Style.activityListButtonIconSize
+            display: AbstractButton.IconOnly
             visible: !root.isPlaceholderLinkShare && !root.isSecureFileDropPlaceholderLinkShare && !root.isInternalLinkShare
             enabled: visible
-
             onClicked: root.rootStackView.push(shareDetailsPageComponent, {}, StackView.PushTransition)
 
             Component {
@@ -260,14 +236,14 @@ GridLayout {
                 ShareDetailsPage {
                     id: shareDetailsPage
 
-                    width: parent.width
-                    height: parent.height
                     backgroundsVisible: root.backgroundsVisible
+                    accentColor: root.accentColor
 
                     fileDetails: root.fileDetails
                     shareModelData: model
 
                     canCreateLinkShares: root.canCreateLinkShares
+                    serverAllowsResharing: root.serverAllowsResharing
 
                     onCloseShareDetails: root.rootStackView.pop(root.rootStackView.initialItem, StackView.PopTransition)
 

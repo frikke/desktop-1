@@ -16,6 +16,10 @@
 #pragma once
 
 #include "owncloudlib.h"
+
+#include "accountfwd.h"
+#include "common/asserts.h"
+
 #include <QObject>
 #include <QNetworkRequest>
 #include <QNetworkReply>
@@ -23,8 +27,6 @@
 #include <QElapsedTimer>
 #include <QDateTime>
 #include <QTimer>
-#include "accountfwd.h"
-#include "common/asserts.h"
 
 class QUrl;
 
@@ -40,8 +42,10 @@ class OWNCLOUDSYNC_EXPORT AbstractNetworkJob : public QObject
 {
     Q_OBJECT
 public:
-    explicit AbstractNetworkJob(AccountPtr account, const QString &path, QObject *parent = nullptr);
+    explicit AbstractNetworkJob(const AccountPtr &account, const QString &path, QObject *parent = nullptr);
     ~AbstractNetworkJob() override;
+
+    static bool enableTimeout;
 
     virtual void start();
 
@@ -85,7 +89,7 @@ public:
      * This function reads the body of the reply and parses out the
      * error information, if possible.
      *
-     * \a body is optinally filled with the reply body.
+     * \a body is optionally filled with the reply body.
      *
      * Warning: Needs to call reply()->readAll().
      */
@@ -97,7 +101,7 @@ public:
      * This function reads the body of the reply and parses out the
      * error information, if possible.
      *
-     * \a body is optinally filled with the reply body.
+     * \a body is optionally filled with the reply body.
      *
      * Warning: Needs to call reply()->readAll().
      */

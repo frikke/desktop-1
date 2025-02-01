@@ -14,9 +14,7 @@
 
 #include <QDir>
 #include <QFile>
-#include <QTextStream>
-
-#include <qtokenizer.h>
+#include <QRegularExpression>
 
 #include <QDebug>
 
@@ -58,26 +56,29 @@ bool NetrcParser::parse()
         return false;
     }
     QString content = netrc.readAll();
+    if (content.isEmpty()) {
+        return false;
+    }
 
-    QStringTokenizer tokenizer(content, " \n\t");
-    tokenizer.setQuoteCharacters("\"'");
+    auto tokens = content.split(QRegularExpression("\\s+"));
 
     LoginPair pair;
     QString machine;
     bool isDefault = false;
-    while (tokenizer.hasNext()) {
-        QString key = tokenizer.next();
+    for(int i=0; i<tokens.count(); i++) {
+        const auto key = tokens[i];
         if (key == defaultKeyword) {
             tryAddEntryAndClear(machine, pair, isDefault);
             isDefault = true;
             continue; // don't read a value
         }
 
-        if (!tokenizer.hasNext()) {
+        i++;
+        if (i >= tokens.count()) {
             qDebug() << "error fetching value for" << key;
-            return false;
+            break;
         }
-        QString value = tokenizer.next();
+        auto value = tokens[i];
 
         if (key == machineKeyword) {
             tryAddEntryAndClear(machine, pair, isDefault);

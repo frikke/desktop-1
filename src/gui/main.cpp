@@ -35,36 +35,39 @@
 #include <QMessageBox>
 #include <QDebug>
 #include <QQuickStyle>
+#include <QStyle>
+#include <QStyleFactory>
 #include <QQuickWindow>
 #include <QSurfaceFormat>
+#include <QOperatingSystemVersion>
 
 using namespace OCC;
 
 void warnSystray()
 {
-    QMessageBox::critical(nullptr, qApp->translate("main.cpp", "System Tray not available"),
+    QMessageBox::critical(
+        nullptr,
+        qApp->translate("main.cpp", "System Tray not available"),
         qApp->translate("main.cpp", "%1 requires on a working system tray. "
                                     "If you are running XFCE, please follow "
                                     "<a href=\"http://docs.xfce.org/xfce/xfce4-panel/systray\">these instructions</a>. "
                                     "Otherwise, please install a system tray application such as \"trayer\" and try again.")
-            .arg(Theme::instance()->appNameGUI()));
+            .arg(Theme::instance()->appNameGUI()),
+        QMessageBox::Ok
+    );
 }
 
 int main(int argc, char **argv)
 {
-    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --no-sandbox");
-    QCoreApplication::setAttribute(Qt::AA_UseOpenGLES);
-
 #ifdef Q_OS_WIN
     SetDllDirectory(L"");
+    qputenv("QML_IMPORT_PATH", (QDir::currentPath() + QStringLiteral("/qml")).toLatin1());
 #endif
+
     Q_INIT_RESOURCE(resources);
     Q_INIT_RESOURCE(theme);
 
     // OpenSSL 1.1.0: No explicit initialisation or de-initialisation is necessary.
-
-    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
-    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
 #ifdef Q_OS_MAC
     Mac::CocoaInitializer cocoaInit; // RIIA
 #endif
@@ -74,19 +77,30 @@ int main(int argc, char **argv)
     QSurfaceFormat::setDefaultFormat(surfaceFormat);
 
     QQuickWindow::setTextRenderType(QQuickWindow::NativeTextRendering);
-    QQuickStyle::setStyle(QStringLiteral("Fusion"));
+
+    auto qmlStyle = QStringLiteral("Fusion");
+    auto widgetsStyle = QStringLiteral("");
+
+#if defined Q_OS_MAC
+    qmlStyle = QStringLiteral("macOS");
+#elif defined Q_OS_WIN
+    if (QOperatingSystemVersion::current().version() < QOperatingSystemVersion::Windows11.version()) {
+        qmlStyle = QStringLiteral("Universal");
+        widgetsStyle = QStringLiteral("Fusion");
+    } else {
+        qmlStyle = QStringLiteral("FluentWinUI3");
+        widgetsStyle = QStringLiteral("windows11");
+    }
+#endif
+
+    QQuickStyle::setStyle(qmlStyle);
+    QQuickStyle::setFallbackStyle(QStringLiteral("Fusion"));
 
     OCC::Application app(argc, argv);
 
-#ifdef Q_OS_WIN
-    // The Windows style still has pixelated elements with Qt 5.6,
-    // it's recommended to use the Fusion style in this case, even
-    // though it looks slightly less native. Check here after the
-    // QApplication was constructed, but before any QWidget is
-    // constructed.
-    if (app.devicePixelRatio() > 1)
-        QApplication::setStyle(QStringLiteral("fusion"));
-#endif // Q_OS_WIN
+    if (!widgetsStyle.isEmpty()) {
+        QApplication::setStyle(QStyleFactory::create(widgetsStyle));
+    }
 
 #ifndef Q_OS_WIN
     signal(SIGPIPE, SIG_IGN);

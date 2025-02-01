@@ -51,7 +51,7 @@ public:
     void setUrl(const QUrl &url);
 
 protected:
-    bool certificateError(const QWebEngineCertificateError &certificateError) override;
+    bool slotCertificateError(const QWebEngineCertificateError &certificateError);
 
     bool acceptNavigationRequest(const QUrl &url, QWebEnginePage::NavigationType type, bool isMainFrame) override;
 
@@ -60,7 +60,7 @@ private:
 };
 
 // We need a separate class here, since we cannot simply return the same WebEnginePage object
-// this leads to a strage segfault somewhere deep inside of the QWebEngine code
+// this leads to a strange segfault somewhere deep inside of the QWebEngine code
 class ExternalWebEnginePage : public QWebEnginePage {
     Q_OBJECT
 public:
@@ -86,11 +86,11 @@ WebView::WebView(QWidget *parent)
     const QString userAgent(Utility::userAgentString());
     _profile->setHttpUserAgent(userAgent);
     QWebEngineProfile::defaultProfile()->setHttpUserAgent(userAgent);
-    _profile->setRequestInterceptor(_interceptor);
+    _profile->setUrlRequestInterceptor(_interceptor);
     _profile->installUrlSchemeHandler("nc", _schemeHandler);
 
     /*
-     * Set a proper accept langauge to the language of the client
+     * Set a proper accept language to the language of the client
      * code from: http://code.qt.io/cgit/qt/qtbase.git/tree/src/network/access/qhttpnetworkconnection.cpp
      */
     {
@@ -137,7 +137,7 @@ void WebView::slotResizeToContents(const QSizeF &size){
 
 WebView::~WebView() {
     /*
-     * The Qt implmentation deletes children in the order they are added to the
+     * The Qt implementation deletes children in the order they are added to the
      * object tree, so in this case _page is deleted after _profile, which
      * violates the assumption that _profile should exist longer than
      * _page [1]. Here I delete _page manually so that _profile can be safely
@@ -202,8 +202,11 @@ void WebViewPageUrlSchemeHandler::requestStarted(QWebEngineUrlRequestJob *reques
 }
 
 
-WebEnginePage::WebEnginePage(QWebEngineProfile *profile, QObject* parent) : QWebEnginePage(profile, parent) {
-
+WebEnginePage::WebEnginePage(QWebEngineProfile *profile, QObject* parent)
+    : QWebEnginePage(profile, parent)
+{
+    connect(this, &QWebEnginePage::certificateError,
+            this, &WebEnginePage::slotCertificateError);
 }
 
 QWebEnginePage * WebEnginePage::createWindow(QWebEnginePage::WebWindowType type) {
@@ -218,7 +221,7 @@ void WebEnginePage::setUrl(const QUrl &url)
     _enforceHttps = url.scheme() == QStringLiteral("https");
 }
 
-bool WebEnginePage::certificateError(const QWebEngineCertificateError &certificateError)
+bool WebEnginePage::slotCertificateError(const QWebEngineCertificateError &certificateError)
 {
     /**
      * TODO properly improve this.

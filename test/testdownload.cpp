@@ -14,7 +14,7 @@ using namespace OCC;
 
 static constexpr qint64 stopAfter = 3'123'668;
 
-/* A FakeGetReply that sends max 'fakeSize' bytes, but whose ContentLength has the corect size */
+/* A FakeGetReply that sends max 'fakeSize' bytes, but whose ContentLength has the correct size */
 class BrokenFakeGetReply : public FakeGetReply
 {
     Q_OBJECT
@@ -26,7 +26,7 @@ public:
     {
         if (aborted)
             return 0;
-        return std::min(size, fakeSize) + QIODevice::bytesAvailable(); // NOLINT: This is intended to simulare the brokeness
+        return std::min(size, fakeSize) + QIODevice::bytesAvailable(); // NOLINT: This is intended to simulate the brokenness
     }
 
     qint64 readData(char *data, qint64 maxlen) override
@@ -56,12 +56,19 @@ class TestDownload : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
 
     void testResume()
     {
         FakeFolder fakeFolder{ FileInfo::A12_B12_C12_S12() };
         fakeFolder.syncEngine().setIgnoreHiddenFiles(true);
-        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &SyncEngine::itemCompleted);
+        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &OCC::SyncEngine::itemCompleted);
         auto size = 30 * 1000 * 1000;
         fakeFolder.remoteModifier().insert("A/a0", size);
 
@@ -75,7 +82,7 @@ private slots:
 
         QVERIFY(!fakeFolder.syncOnce()); // The sync must fail because not all the file was downloaded
         QCOMPARE(getItem(completeSpy, "A/a0")->_status, SyncFileItem::SoftError);
-        QCOMPARE(getItem(completeSpy, "A/a0")->_errorString, QString("The file could not be downloaded completely."));
+        QCOMPARE(getItem(completeSpy, "A/a0")->_errorString, QStringLiteral("The file could not be downloaded completely."));
         QVERIFY(fakeFolder.syncEngine().isAnotherSyncNeeded());
 
         // Now, we need to restart, this time, it should resume.
@@ -96,7 +103,7 @@ private slots:
 
         FakeFolder fakeFolder{FileInfo::A12_B12_C12_S12()};
         fakeFolder.syncEngine().setIgnoreHiddenFiles(true);
-        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &SyncEngine::itemCompleted);
+        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &OCC::SyncEngine::itemCompleted);
         auto size = 3'500'000;
         fakeFolder.remoteModifier().insert("A/broken", size);
 
@@ -236,7 +243,7 @@ private slots:
         resendActual = 0;
         resendExpected = 10;
 
-        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &SyncEngine::itemCompleted);
+        QSignalSpy completeSpy(&fakeFolder.syncEngine(), &OCC::SyncEngine::itemCompleted);
         QVERIFY(!fakeFolder.syncOnce());
         QCOMPARE(resendActual, 4); // the 4th fails because it only resends 3 times
         QCOMPARE(getItem(completeSpy, "A/resendme")->_status, SyncFileItem::NormalError);

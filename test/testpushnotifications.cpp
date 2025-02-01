@@ -20,6 +20,9 @@
 #include "accountfwd.h"
 #include "pushnotifications.h"
 #include "pushnotificationstestutils.h"
+#include "logger.h"
+
+#include <QStandardPaths>
 
 #define RETURN_FALSE_ON_FAIL(expr) \
     if (!(expr)) {                 \
@@ -65,6 +68,14 @@ class TestPushNotifications : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
     void testTryReconnect_capabilitesReportPushNotificationsAvailable_reconnectForEver()
     {
         FakeWebSocketServer fakeServer;
@@ -214,7 +225,7 @@ private slots:
 
         QVERIFY(fakeServer.waitForTextMessages());
         // FIXME: This a little bit ugly but I had no better idea how to trigger a error on the websocket client.
-        // The websocket that is retrived through the server is not connected to the ssl error signal.
+        // The websocket that is retrieved through the server is not connected to the ssl error signal.
         auto pushNotificationsWebSocketChildren = account->pushNotifications()->findChildren<QWebSocket *>();
         QVERIFY(pushNotificationsWebSocketChildren.size() == 1);
         emit pushNotificationsWebSocketChildren[0]->sslErrors(QList<QSslError>());
@@ -274,7 +285,7 @@ private slots:
         auto account = FakeWebSocketServer::createAccount();
         QVERIFY(fakeServer.authenticateAccount(account));
 
-        // Set the ping timeout interval to zero and check if the server attemps to authenticate again
+        // Set the ping timeout interval to zero and check if the server attempts to authenticate again
         fakeServer.clearTextMessages();
         account->pushNotifications()->setPingInterval(0);
         QVERIFY(fakeServer.authenticateAccount(

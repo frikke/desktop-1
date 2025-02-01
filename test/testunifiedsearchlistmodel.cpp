@@ -52,7 +52,7 @@ public:
     QString _id;
     QString _name;
     qint32 _order = std::numeric_limits<qint32>::max();
-    quint32 _numItemsToInsert = 5; // how many fake resuls to insert
+    quint32 _numItemsToInsert = 5; // how many fake results to insert
 };
 
 // this will be used when initializing fake search results data for each provider
@@ -303,6 +303,11 @@ public:
 private slots:
     void initTestCase()
     {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+
         fakeQnam.reset(new FakeQNAM({}));
         account = OCC::Account::create();
         account->setCredentials(new FakeCredentials{fakeQnam.data()});

@@ -12,12 +12,12 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 
 StackView {
     id: root
@@ -27,17 +27,18 @@ StackView {
     property alias accountState: fileDetailsPage.accountState
     property alias localPath: fileDetailsPage.localPath
     property alias showCloseButton: fileDetailsPage.showCloseButton
+    property alias accentColor: fileDetailsPage.accentColor
     property bool backgroundsVisible: true
 
     background: Rectangle {
-        color: palette.window
+        color: palette.base
         visible: root.backgroundsVisible
     }
 
     initialItem: FileDetailsPage {
         id: fileDetailsPage
-        width: parent.width
-        height: parent.height
+        width: root.width
+        height: root.height
         backgroundsVisible: root.backgroundsVisible
         rootStackView: root
         onCloseButtonClicked: root.closeButtonClicked()

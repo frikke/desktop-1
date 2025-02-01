@@ -12,23 +12,23 @@
  * for more details.
  */
 #include "selectivesyncdialog.h"
-#include "folder.h"
 #include "account.h"
+#include "common/utility.h"
+#include "configfile.h"
+#include "folder.h"
+#include "folderman.h"
 #include "networkjobs.h"
 #include "theme.h"
-#include "folderman.h"
-#include "configfile.h"
 #include <QDialogButtonBox>
-#include <QVBoxLayout>
-#include <QTreeWidget>
-#include <qpushbutton.h>
 #include <QFileIconProvider>
 #include <QHeaderView>
-#include <QSettings>
-#include <QScopedValueRollback>
-#include <QTreeWidgetItem>
 #include <QLabel>
+#include <QScopedValueRollback>
+#include <QSettings>
+#include <QTreeWidget>
+#include <QTreeWidgetItem>
 #include <QVBoxLayout>
+#include <qpushbutton.h>
 
 namespace OCC {
 
@@ -107,12 +107,10 @@ void SelectiveSyncWidget::refreshFolders()
 {
     _encryptedPaths.clear();
 
-    auto *job = new LsColJob(_account, _folderPath, this);
+    auto *job = new LsColJob(_account, _folderPath);
     auto props = QList<QByteArray>() << "resourcetype"
-                                     << "http://owncloud.org/ns:size";
-    if (_account->capabilities().clientSideEncryptionAvailable()) {
-        props << "http://nextcloud.org/ns:is-encrypted";
-    }
+                                     << "http://owncloud.org/ns:size"
+                                     << "http://nextcloud.org/ns:is-encrypted";
     job->setProperties(props);
     connect(job, &LsColJob::directoryListingSubfolders,
         this, &SelectiveSyncWidget::slotUpdateDirectories);
@@ -203,10 +201,7 @@ void SelectiveSyncWidget::slotUpdateDirectories(QStringList list)
     auto *root = dynamic_cast<SelectiveSyncTreeViewItem *>(_folderTree->topLevelItem(0));
 
     QUrl url = _account->davUrl();
-    QString pathToRemove = url.path();
-    if (!pathToRemove.endsWith('/')) {
-        pathToRemove.append('/');
-    }
+    auto pathToRemove = Utility::trailingSlashPath(url.path());
     pathToRemove.append(_folderPath);
     if (!_folderPath.isEmpty())
         pathToRemove.append('/');
@@ -339,7 +334,7 @@ void SelectiveSyncWidget::slotItemExpanded(QTreeWidgetItem *item)
     if (!_folderPath.isEmpty()) {
         prefix = _folderPath + QLatin1Char('/');
     }
-    auto *job = new LsColJob(_account, prefix + dir, this);
+    auto *job = new LsColJob(_account, prefix + dir);
     job->setProperties(QList<QByteArray>() << "resourcetype"
                                            << "http://owncloud.org/ns:size");
     connect(job, &LsColJob::directoryListingSubfolders,
@@ -428,7 +423,7 @@ QStringList SelectiveSyncWidget::createBlackList(QTreeWidgetItem *root) const
             result += createBlackList(root->child(i));
         }
     } else {
-        // We did not load from the server so we re-use the one from the old black list
+        // We did not load from the server so we reuse the one from the old black list
         QString path = root->data(0, Qt::UserRole).toString();
         foreach (const QString &it, _oldBlackList) {
             if (it.startsWith(path))
@@ -521,7 +516,8 @@ void SelectiveSyncDialog::accept()
 {
     if (_folder) {
         bool ok = false;
-        auto oldBlackListSet = _folder->journalDb()->getSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, &ok).toSet();
+        auto oldBlackList = _folder->journalDb()->getSelectiveSyncList(SyncJournalDb::SelectiveSyncBlackList, &ok);
+        auto oldBlackListSet = QSet<QString>{oldBlackList.begin(), oldBlackList.end()};
         if (!ok) {
             return;
         }
@@ -535,7 +531,7 @@ void SelectiveSyncDialog::accept()
 
         //The part that changed should not be read from the DB on next sync because there might be new folders
         // (the ones that are no longer in the blacklist)
-        auto blackListSet = blackList.toSet();
+        auto blackListSet = QSet<QString>{blackList.begin(), blackList.end()};
         auto changes = (oldBlackListSet - blackListSet) + (blackListSet - oldBlackListSet);
         foreach (const auto &it, changes) {
             _folder->journalDb()->schedulePathForRemoteDiscovery(it);

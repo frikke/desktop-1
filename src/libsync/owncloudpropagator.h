@@ -25,13 +25,16 @@
 #include <QMutex>
 #include <QNetworkReply>
 
-#include "csync.h"
-#include "syncfileitem.h"
-#include "common/syncjournaldb.h"
-#include "bandwidthmanager.h"
 #include "accountfwd.h"
-#include "syncoptions.h"
+#include "bandwidthmanager.h"
+#include "csync.h"
 #include "progressdispatcher.h"
+#include "syncfileitem.h"
+#include "syncoptions.h"
+
+#include "common/syncjournaldb.h"
+#include "common/utility.h"
+#include "common/vfs.h"
 
 #include <deque>
 
@@ -55,6 +58,7 @@ void blacklistUpdate(SyncJournalDb *journal, SyncFileItem &item);
 class SyncJournalDb;
 class OwncloudPropagator;
 class PropagatorCompositeJob;
+class FolderMetadata;
 
 /**
  * @brief the base class of propagator jobs
@@ -191,6 +195,8 @@ protected slots:
     void slotRestoreJobFinished(SyncFileItem::Status status);
 
 private:
+    void reportClientStatuses();
+
     QScopedPointer<PropagateItemJob> _restoreJob;
     JobParallelism _parallelism = FullParallelism;
 
@@ -240,6 +246,8 @@ public:
     QVector<PropagatorJob *> _runningJobs;
     SyncFileItem::Status _hasError = SyncFileItem::NoStatus; // NoStatus,  or NormalError / SoftError if there was an error
     quint64 _abortsCount = 0;
+    bool _isAnyCaseClashChild = false;
+    bool _isAnyInvalidCharChild = false;
 
     explicit PropagatorCompositeJob(OwncloudPropagator *propagator)
         : PropagatorJob(propagator)
@@ -307,7 +315,7 @@ class OWNCLOUDSYNC_EXPORT PropagateDirectory : public PropagatorJob
 public:
     SyncFileItemPtr _item;
     // e.g: create the directory
-    QScopedPointer<PropagateItemJob> _firstJob;
+    std::unique_ptr<PropagateItemJob> _firstJob;
 
     PropagatorCompositeJob _subJobs;
 
@@ -406,6 +414,17 @@ public:
     void start() override;
 };
 
+class PropagateVfsUpdateMetadataJob : public PropagateItemJob
+{
+    Q_OBJECT
+public:
+    PropagateVfsUpdateMetadataJob(OwncloudPropagator *propagator, const SyncFileItemPtr &item)
+        : PropagateItemJob(propagator, item)
+    {
+    }
+    void start() override;
+};
+
 class PropagateUploadFileCommon;
 
 class OWNCLOUDSYNC_EXPORT OwncloudPropagator : public QObject
@@ -416,15 +435,13 @@ public:
     bool _finishedEmited = false; // used to ensure that finished is only emitted once
 
 public:
-    OwncloudPropagator(AccountPtr account, const QString &localDir,
-                       const QString &remoteFolder, SyncJournalDb *progressDb,
-                       QSet<QString> &bulkUploadBlackList)
+    OwncloudPropagator(AccountPtr account, const QString &localDir, const QString &remoteFolder, SyncJournalDb *progressDb, QSet<QString> &bulkUploadBlackList)
         : _journal(progressDb)
         , _bandwidthManager(this)
         , _chunkSize(10 * 1000 * 1000) // 10 MB, overridden in setSyncOptions
         , _account(account)
-        , _localDir((localDir.endsWith(QChar('/'))) ? localDir : localDir + '/')
-        , _remoteFolder((remoteFolder.endsWith(QChar('/'))) ? remoteFolder : remoteFolder + '/')
+        , _localDir(Utility::trailingSlashPath(localDir))
+        , _remoteFolder(Utility::trailingSlashPath(remoteFolder))
         , _bulkUploadBlackList(bulkUploadBlackList)
     {
         qRegisterMetaType<PropagatorJob::AbortType>("PropagatorJob::AbortType");
@@ -446,6 +463,8 @@ public:
                               QString &removedDirectory,
                               QString &maybeConflictDirectory);
 
+    void processE2eeMetadataMigration(const SyncFileItemPtr &item, QStack<QPair<QString, PropagateDirectory *>> &directories);
+
     [[nodiscard]] const SyncOptions &syncOptions() const;
     void setSyncOptions(const SyncOptions &syncOptions);
 
@@ -456,9 +475,9 @@ public:
     bool _abortRequested = false;
 
     /** The list of currently active jobs.
-        This list contains the jobs that are currently using ressources and is used purely to
+        This list contains the jobs that are currently using resources and is used purely to
         know how many jobs there is currently running for the scheduler.
-        Jobs add themself to the list when they do an assynchronous operation.
+        Jobs add themself to the list when they do an asynchronous operation.
         Jobs can be several time on the list (example, when several chunks are uploaded in parallel)
      */
     QList<PropagateItemJob *> _activeJobList;
@@ -468,7 +487,7 @@ public:
 
     /** Per-folder quota guesses.
      *
-     * This starts out empty. When an upload in a folder fails due to insufficent
+     * This starts out empty. When an upload in a folder fails due to insufficient
      * remote quota, the quota guess is updated to be attempted_size-1 at maximum.
      *
      * Note that it will usually just an upper limit for the actual quota - but
@@ -519,6 +538,8 @@ public:
      */
     Q_REQUIRED_RESULT QString fullRemotePath(const QString &tmp_file_name) const;
     [[nodiscard]] QString remotePath() const;
+
+    [[nodiscard]] QString fulllRemotePathToPathInSyncJournalDb(const QString &fullRemotePath) const;
 
     /** Creates the job for an item.
      */
@@ -593,7 +614,7 @@ public:
      *
      * Will also trigger a Vfs::convertToPlaceholder.
      */
-    Result<Vfs::ConvertToPlaceholderResult, QString> updateMetadata(const SyncFileItem &item);
+    Result<Vfs::ConvertToPlaceholderResult, QString> updateMetadata(const SyncFileItem &item, Vfs::UpdateMetadataTypes updateType = Vfs::AllMetadata);
 
     /** Update the database for an item.
      *
@@ -602,8 +623,11 @@ public:
      *
      * Will also trigger a Vfs::convertToPlaceholder.
      */
-    static Result<Vfs::ConvertToPlaceholderResult, QString> staticUpdateMetadata(const SyncFileItem &item, const QString localDir,
-                                                                                 Vfs *vfs, SyncJournalDb * const journal);
+    static Result<Vfs::ConvertToPlaceholderResult, QString> staticUpdateMetadata(const SyncFileItem &item,
+                                                                                 const QString localDir,
+                                                                                 Vfs *vfs,
+                                                                                 SyncJournalDb * const journal,
+                                                                                 Vfs::UpdateMetadataTypes updateType);
 
     Q_REQUIRED_RESULT bool isDelayedUploadItem(const SyncFileItemPtr &item) const;
 
@@ -634,8 +658,9 @@ private slots:
     /** Emit the finished signal and make sure it is only emitted once */
     void emitFinished(OCC::SyncFileItem::Status status)
     {
-        if (!_finishedEmited)
-            emit finished(status == SyncFileItem::Success);
+        if (!_finishedEmited) {
+            emit finished(status);
+        }
         _abortRequested = false;
         _finishedEmited = true;
     }
@@ -644,9 +669,9 @@ private slots:
 
 signals:
     void newItem(const OCC::SyncFileItemPtr &);
-    void itemCompleted(const SyncFileItemPtr &item, OCC::ErrorCategory category);
+    void itemCompleted(const OCC::SyncFileItemPtr &item, OCC::ErrorCategory category);
     void progress(const OCC::SyncFileItem &, qint64 bytes);
-    void finished(bool success);
+    void finished(OCC::SyncFileItem::Status status);
 
     /** Emitted when propagation has problems with a locked file. */
     void seenLockedFile(const QString &fileName);
@@ -725,7 +750,7 @@ public:
     void start();
 signals:
     void finished();
-    void aborted(const QString &error, const ErrorCategory errorCategory);
+    void aborted(const QString &error, const OCC::ErrorCategory errorCategory);
 private slots:
     void slotPollFinished();
 };

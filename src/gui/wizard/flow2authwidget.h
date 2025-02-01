@@ -43,16 +43,16 @@ public Q_SLOTS:
     void slotStatusChanged(Flow2Auth::PollStatus status, int secondsLeft);
     void slotStyleChanged();
 
-signals:
+Q_SIGNALS:
     void authResult(Flow2Auth::Result, const QString &errorString, const QString &user, const QString &appPassword);
     void pollNow();
 
 private:
     Account *_account = nullptr;
-    QScopedPointer<Flow2Auth> _asyncAuth;
+    std::unique_ptr<Flow2Auth> _asyncAuth;
     Ui_Flow2AuthWidget _ui{};
 
-protected slots:
+protected Q_SLOTS:
     void slotOpenBrowser();
     void slotCopyLinkToClipboard();
 

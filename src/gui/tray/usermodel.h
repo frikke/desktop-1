@@ -8,12 +8,13 @@
 #include <QQuickImageProvider>
 #include <QHash>
 
-#include "activitylistmodel.h"
 #include "accountfwd.h"
 #include "accountmanager.h"
+#include "activitydata.h"
+#include "activitylistmodel.h"
 #include "folderman.h"
-#include "userstatusselectormodel.h"
 #include "userstatusconnector.h"
+#include "userstatusselectormodel.h"
 #include <chrono>
 
 namespace OCC {
@@ -55,7 +56,9 @@ class User : public QObject
     Q_PROPERTY(QString statusMessage READ statusMessage NOTIFY statusChanged)
     Q_PROPERTY(bool desktopNotificationsAllowed READ isDesktopNotificationsAllowed NOTIFY desktopNotificationsAllowedChanged)
     Q_PROPERTY(bool hasLocalFolder READ hasLocalFolder NOTIFY hasLocalFolderChanged)
-    Q_PROPERTY(bool serverHasTalk READ serverHasTalk NOTIFY serverHasTalkChanged)
+    Q_PROPERTY(bool isFeaturedAppEnabled READ isFeaturedAppEnabled NOTIFY featuredAppChanged)
+    Q_PROPERTY(QString featuredAppIcon READ featuredAppIcon NOTIFY featuredAppChanged)
+    Q_PROPERTY(QString featuredAppAccessibleName READ featuredAppAccessibleName NOTIFY featuredAppChanged)
     Q_PROPERTY(QString avatar READ avatarUrl NOTIFY avatarChanged)
     Q_PROPERTY(bool isConnected READ isConnected NOTIFY accountStateChanged)
     Q_PROPERTY(UnifiedSearchResultsListModel* unifiedSearchResultsListModel READ getUnifiedSearchResultsListModel CONSTANT)
@@ -73,15 +76,18 @@ public:
     [[nodiscard]] Folder *getFolder() const;
     ActivityListModel *getActivityModel();
     [[nodiscard]] UnifiedSearchResultsListModel *getUnifiedSearchResultsListModel() const;
-    void openLocalFolder();
+    void openLocalFolder() const;
     void openFolderLocallyOrInBrowser(const QString &fullRemotePath);
     [[nodiscard]] QString name() const;
     [[nodiscard]] QString server(bool shortened = true) const;
     [[nodiscard]] bool hasLocalFolder() const;
-    [[nodiscard]] bool serverHasTalk() const;
+    [[nodiscard]] bool isFeaturedAppEnabled() const;
+    [[nodiscard]] QString featuredAppIcon() const;
+    [[nodiscard]] QString featuredAppAccessibleName() const;
     [[nodiscard]] bool serverHasUserStatus() const;
     [[nodiscard]] AccountApp *talkApp() const;
     [[nodiscard]] bool hasActivities() const;
+    [[nodiscard]] bool isNcAssistantEnabled() const;
     [[nodiscard]] QColor accentColor() const;
     [[nodiscard]] QColor headerColor() const;
     [[nodiscard]] QColor headerTextColor() const;
@@ -102,7 +108,7 @@ public:
 signals:
     void nameChanged();
     void hasLocalFolderChanged();
-    void serverHasTalkChanged();
+    void featuredAppChanged();
     void avatarChanged();
     void accountStateChanged();
     void statusChanged();
@@ -117,13 +123,15 @@ public slots:
     void slotItemCompleted(const QString &folder, const OCC::SyncFileItemPtr &item);
     void slotProgressInfo(const QString &folder, const OCC::ProgressInfo &progress);
     void slotAddError(const QString &folderAlias, const QString &message, OCC::ErrorCategory category);
-    void slotAddErrorToGui(const QString &folderAlias, const OCC::SyncFileItem::Status status, const QString &errorMessage, const QString &subject, const ErrorCategory category);
+    void slotAddErrorToGui(const QString &folderAlias, const OCC::SyncFileItem::Status status, const QString &errorMessage, const QString &subject, const OCC::ErrorCategory category);
+    void slotAddNotification(const OCC::Folder *folder, const OCC::Activity &activity);
     void slotNotificationRequestFinished(int statusCode);
     void slotNotifyNetworkError(QNetworkReply *reply);
     void slotEndNotificationRequest(int replyCode);
     void slotNotifyServerFinished(const QString &reply, int replyCode);
     void slotSendNotificationRequest(const QString &accountName, const QString &link, const QByteArray &verb, int row);
     void slotBuildNotificationDisplay(const OCC::ActivityList &list);
+    void slotNotificationFetchFinished();
     void slotBuildIncomingCallDialogs(const OCC::ActivityList &list);
     void slotRefreshNotifications();
     void slotRefreshActivitiesInitial();
@@ -163,6 +171,10 @@ private:
     bool notificationAlreadyShown(const long notificationId);
     bool canShowNotification(const long notificationId);
 
+    void checkAndRemoveSeenActivities(const ActivityList &list, const int numTalkNotificationsReceived);
+
+    [[nodiscard]] bool serverHasTalk() const;
+
     AccountStatePtr _account;
     bool _isCurrentUser;
     ActivityListModel *_activityModel;
@@ -182,6 +194,10 @@ private:
     // number of currently running notification requests. If non zero,
     // no query for notifications is started.
     int _notificationRequestsRunning = 0;
+
+    int _lastTalkNotificationsReceivedCount = 0;
+
+    bool _isNotificationFetchRunning = false;
 };
 
 class UserModel : public QAbstractListModel
@@ -203,8 +219,8 @@ public:
     [[nodiscard]]  QImage avatarById(const int id) const;
 
     [[nodiscard]] User *currentUser() const;
-
-    int findUserIdForAccount(AccountState *account) const;
+    [[nodiscard]] User *findUserForAccount(AccountState *account) const;
+    [[nodiscard]] int findUserIdForAccount(AccountState *account) const;
 
     Q_INVOKABLE int numUsers();
     Q_INVOKABLE QString currentUserServer();
@@ -239,9 +255,9 @@ signals:
 public slots:
     void fetchCurrentActivityModel();
     void openCurrentAccountLocalFolder();
-    void openCurrentAccountTalk();
     void openCurrentAccountServer();
     void openCurrentAccountFolderFromTrayInfo(const QString &fullRemotePath);
+    void openCurrentAccountFeaturedApp();
     void setCurrentUserId(const int id);
     void login(const int id);
     void logout(const int id);
@@ -260,11 +276,16 @@ private:
     void buildUserList();
 };
 
-class ImageProvider : public QQuickImageProvider
+class ImageProvider : public QQuickAsyncImageProvider
 {
+    Q_OBJECT
+
 public:
-    ImageProvider();
-    QImage requestImage(const QString &id, QSize *size, const QSize &requestedSize) override;
+    ImageProvider() = default;
+    QQuickImageResponse *requestImageResponse(const QString &id, const QSize &requestedSize) override;
+
+private:
+    QThreadPool _pool;
 };
 
 class UserAppsModel : public QAbstractListModel
