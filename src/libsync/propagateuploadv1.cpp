@@ -53,7 +53,7 @@ void PropagateUploadFileV1::doStartUpload()
     }
     if (progressInfo._valid && progressInfo.isChunked() && progressInfo._modtime == _item->_modtime && progressInfo._size == _item->_size
         && (progressInfo._contentChecksum == _item->_checksumHeader || progressInfo._contentChecksum.isEmpty() || _item->_checksumHeader.isEmpty())) {
-        _startChunk = progressInfo._chunk;
+        _startChunk = progressInfo._chunkUploadV1;
         _transferId = progressInfo._transferid;
         qCInfo(lcPropagateUploadV1) << _item->_file << ": Resuming from chunk " << _startChunk;
     } else if (_chunkCount <= 1 && !_item->_checksumHeader.isEmpty()) {
@@ -62,7 +62,7 @@ void PropagateUploadFileV1::doStartUpload()
         // in reconcile (issue #5106)
         SyncJournalDb::UploadInfo pi;
         pi._valid = true;
-        pi._chunk = 0;
+        pi._chunkUploadV1 = 0;
         pi._transferid = 0; // We set a null transfer id because it is not chunked.
         Q_ASSERT(_item->_modtime > 0);
         if (_item->_modtime <= 0) {
@@ -102,6 +102,11 @@ void PropagateUploadFileV1::startNextChunk()
 
     QString path = _fileToUpload._file;
 
+    if (_item->_lockOwnerType == SyncFileItem::LockOwnerType::TokenLock &&
+        _item->_locked == SyncFileItem::LockStatus::LockedItem) {
+        headers[QByteArrayLiteral("If")] = (QLatin1String("<") + propagator()->account()->davUrl().toString() + _fileToUpload._file + "> (<opaquelocktoken:" + _item->_lockToken.toUtf8() + ">)").toUtf8();
+    }
+
     qint64 chunkStart = 0;
     qint64 currentChunkSize = fileSize;
     bool isFinalChunk = false;
@@ -110,7 +115,7 @@ void PropagateUploadFileV1::startNextChunk()
         // XOR with chunk size to make sure everything goes well if chunk size changes between runs
         uint transid = _transferId ^ uint(chunkSize());
         qCInfo(lcPropagateUploadV1) << "Upload chunk" << sendingChunk << "of" << _chunkCount << "transferid(remote)=" << transid;
-        path += QString("-chunking-%1-%2-%3").arg(transid).arg(_chunkCount).arg(sendingChunk);
+        path += QStringLiteral("-chunking-%1-%2-%3").arg(transid).arg(_chunkCount).arg(sendingChunk);
 
         headers[QByteArrayLiteral("OC-Chunked")] = QByteArrayLiteral("1");
 
@@ -218,6 +223,9 @@ void PropagateUploadFileV1::slotPutFinished()
     QNetworkReply::NetworkError err = job->reply()->error();
     if (err != QNetworkReply::NoError) {
         commonErrorHandling(job);
+        const auto exceptionParsed = getExceptionFromReply(job->reply());
+        _item->_errorExceptionName = exceptionParsed.first;
+        _item->_errorExceptionMessage = exceptionParsed.second;
         return;
     }
 
@@ -256,7 +264,7 @@ void PropagateUploadFileV1::slotPutFinished()
         }
     }
 
-    // Check whether the file changed since discovery. the file check here is the original and not the temprary.
+    // Check whether the file changed since discovery. the file check here is the original and not the temporary.
     Q_ASSERT(_item->_modtime > 0);
     if (_item->_modtime <= 0) {
         qCWarning(lcPropagateUpload()) << "invalid modified time" << _item->_file << _item->_modtime;
@@ -297,7 +305,7 @@ void PropagateUploadFileV1::slotPutFinished()
                 currentChunk = qMin(currentChunk, putJob->_chunk - 1);
             }
         }
-        pi._chunk = (currentChunk + _startChunk + 1) % _chunkCount; // next chunk to start with
+        pi._chunkUploadV1 = (currentChunk + _startChunk + 1) % _chunkCount; // next chunk to start with
         pi._transferid = _transferId;
         Q_ASSERT(_item->_modtime > 0);
         if (_item->_modtime <= 0) {
@@ -321,6 +329,12 @@ void PropagateUploadFileV1::slotPutFinished()
             qCWarning(lcPropagateUploadV1) << "File ID changed!" << _item->_fileId << fid;
         }
         _item->_fileId = fid;
+    }
+
+    if (SyncJournalFileRecord oldRecord; propagator()->_journal->getFileRecord(_item->destination(), &oldRecord) && oldRecord.isValid()) {
+        if (oldRecord._etag != _item->_etag) {
+            _item->updateLockStateFromDbRecord(oldRecord);
+        }
     }
 
     _item->_etag = etag;

@@ -152,7 +152,7 @@ void WatcherThread::watchChanges(size_t fileNotifyBufferSize,
             // and new files in a folder, probably because of the folder's mtime
             // changing. We don't need them.
             const bool skip = curEntry->Action == FILE_ACTION_MODIFIED
-                && QFileInfo(longfile).isDir();
+                && FileSystem::isDir(longfile);
 
             if (!skip) {
                 emit changed(longfile);
@@ -163,7 +163,7 @@ void WatcherThread::watchChanges(size_t fileNotifyBufferSize,
             if (curEntry->NextEntryOffset == 0) {
                 break;
             }
-            // FILE_NOTIFY_INFORMATION has no fixed size and the offset is in bytes therefor we first need to cast to char
+            // FILE_NOTIFY_INFORMATION has no fixed size and the offset is in bytes therefore we first need to cast to char
             curEntry = reinterpret_cast<FILE_NOTIFY_INFORMATION *>(reinterpret_cast<char*>(curEntry) + curEntry->NextEntryOffset);
         }
     }

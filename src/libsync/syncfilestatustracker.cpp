@@ -136,7 +136,7 @@ SyncFileStatus SyncFileStatusTracker::fileStatus(const QString &relativePath)
     // that the status of CSYNC_FILE_EXCLUDE_LIST excludes will change if the user
     // update the exclude list at runtime and doing it statically here removes
     // our ability to notify changes through the fileStatusChanged signal,
-    // it's an acceptable compromize to treat all exclude types the same.
+    // it's an acceptable compromise to treat all exclude types the same.
     // Update: This extra check shouldn't hurt even though silently excluded files
     // are now available via slotAddSilentlyExcluded().
     if (_syncEngine->excludedFiles().isExcluded(_syncEngine->localPath() + relativePath,
@@ -172,7 +172,17 @@ void SyncFileStatusTracker::slotPathTouched(const QString &fileName)
 void SyncFileStatusTracker::slotAddSilentlyExcluded(const QString &folderPath)
 {
     _syncProblems[folderPath] = SyncFileStatus::StatusExcluded;
+    _syncSilentExcludes[folderPath] = SyncFileStatus::StatusExcluded;
     emit fileStatusChanged(getSystemDestination(folderPath), resolveSyncAndErrorStatus(folderPath, NotShared));
+}
+
+void SyncFileStatusTracker::slotCheckAndRemoveSilentlyExcluded(const QString &folderPath)
+{
+    const auto foundIt = _syncSilentExcludes.find(folderPath);
+    if (foundIt != _syncSilentExcludes.end()) {
+        _syncSilentExcludes.erase(foundIt);
+        emit fileStatusChanged(getSystemDestination(folderPath), SyncFileStatus::StatusUpToDate);
+    }
 }
 
 void SyncFileStatusTracker::incSyncCountAndEmitStatusChanged(const QString &relativePath, SharedFlag sharedFlag)
@@ -231,12 +241,17 @@ void SyncFileStatusTracker::slotAboutToPropagate(SyncFileItemVector &items)
 
         if (hasErrorStatus(*item)) {
             _syncProblems[item->destination()] = SyncFileStatus::StatusError;
+            _syncSilentExcludes.erase(item->destination());
             invalidateParentPaths(item->destination());
         } else if (hasExcludedStatus(*item)) {
             _syncProblems[item->destination()] = SyncFileStatus::StatusExcluded;
+            _syncSilentExcludes.erase(item->destination());
         }
 
         SharedFlag sharedFlag = item->_remotePerm.hasPermission(RemotePermissions::IsShared) ? Shared : NotShared;
+        if (item->_instruction != CSyncEnums::CSYNC_INSTRUCTION_REMOVE) {
+            item->_discoveryResult.clear();
+        }
         if (item->_instruction != CSYNC_INSTRUCTION_NONE
             && item->_instruction != CSYNC_INSTRUCTION_UPDATE_METADATA
             && item->_instruction != CSYNC_INSTRUCTION_IGNORE
@@ -253,7 +268,7 @@ void SyncFileStatusTracker::slotAboutToPropagate(SyncFileItemVector &items)
     // Swap into a copy since fileStatus() reads _dirtyPaths to determine the status
     QSet<QString> oldDirtyPaths;
     std::swap(_dirtyPaths, oldDirtyPaths);
-    for (const auto &oldDirtyPath : qAsConst(oldDirtyPaths))
+    for (const auto &oldDirtyPath : std::as_const(oldDirtyPaths))
         emit fileStatusChanged(getSystemDestination(oldDirtyPath), fileStatus(oldDirtyPath));
 
     // Make sure to push any status that might have been resolved indirectly since the last sync
@@ -281,13 +296,14 @@ void SyncFileStatusTracker::slotItemCompleted(const SyncFileItemPtr &item)
     } else {
         _syncProblems.erase(item->destination());
     }
+    _syncSilentExcludes.erase(item->destination());
 
     SharedFlag sharedFlag = item->_remotePerm.hasPermission(RemotePermissions::IsShared) ? Shared : NotShared;
     if (item->_instruction != CSYNC_INSTRUCTION_NONE
         && item->_instruction != CSYNC_INSTRUCTION_UPDATE_METADATA
         && item->_instruction != CSYNC_INSTRUCTION_IGNORE
         && item->_instruction != CSYNC_INSTRUCTION_ERROR) {
-        // decSyncCount calls *must* be symetric with incSyncCount calls in slotAboutToPropagate
+        // decSyncCount calls *must* be symmetric with incSyncCount calls in slotAboutToPropagate
         decSyncCountAndEmitStatusChanged(item->destination(), sharedFlag);
     } else {
         emit fileStatusChanged(getSystemDestination(item->destination()), resolveSyncAndErrorStatus(item->destination(), sharedFlag));

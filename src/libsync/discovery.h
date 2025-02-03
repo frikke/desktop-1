@@ -108,8 +108,8 @@ public:
         QueryMode queryLocal, QueryMode queryServer, qint64 lastSyncTimestamp,
         ProcessDirectoryJob *parent);
 
-    explicit ProcessDirectoryJob(DiscoveryPhase *data, PinState basePinState, const PathTuple &path, const SyncFileItemPtr &dirItem,
-        QueryMode queryLocal, qint64 lastSyncTimestamp, QObject *parent);
+    explicit ProcessDirectoryJob(DiscoveryPhase *data, PinState basePinState, const PathTuple &path, const SyncFileItemPtr &dirItem, const SyncFileItemPtr &parentDirItem,
+                                 QueryMode queryLocal, qint64 lastSyncTimestamp, QObject *parent);
 
     void start();
     /** Start up to nbJobs, return the number of job started; emit finished() when done */
@@ -126,6 +126,7 @@ public:
     }
 
     SyncFileItemPtr _dirItem;
+    SyncFileItemPtr _dirParentItem;
 
 private:
     struct Entries
@@ -162,6 +163,12 @@ private:
      */
     void processFile(PathTuple, const LocalInfo &, const RemoteInfo &, const SyncJournalFileRecord &);
 
+    void postProcessServerNew(const SyncFileItemPtr &item,
+                              PathTuple &path,
+                              const LocalInfo &localEntry,
+                              const RemoteInfo &serverEntry,
+                              const SyncJournalFileRecord &dbEntry);
+
     /// processFile helper for when remote information is available, typically flows into AnalyzeLocalInfo when done
     void processFileAnalyzeRemoteInfo(const SyncFileItemPtr &item, PathTuple, const LocalInfo &, const RemoteInfo &, const SyncJournalFileRecord &);
 
@@ -184,6 +191,8 @@ private:
     [[nodiscard]] bool isAnyParentBeingRestored(const QString &file) const;
 
     [[nodiscard]] bool isRename(const QString &originalPath) const;
+
+    [[nodiscard]] QStringList queryEditorsKeepingFileBusy(const SyncFileItemPtr &item, const PathTuple &path) const;
 
     struct MovePermissionResult
     {

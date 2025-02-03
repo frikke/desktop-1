@@ -19,6 +19,7 @@
 
 #include "account.h"
 #include "folder.h"
+#include "common/filesystembase.h"
 
 #include <QPushButton>
 #include <QDir>
@@ -88,7 +89,10 @@ CaseClashFilenameDialog::CaseClashFilenameDialog(AccountPtr account,
 
     _relativeFilePath = filePathFileInfo.path() + QStringLiteral("/");
     _relativeFilePath = _relativeFilePath.replace(folder->path(), QLatin1String());
-    _relativeFilePath = _relativeFilePath.isEmpty() ? QString() : _relativeFilePath + QStringLiteral("/");
+    _relativeFilePath = _relativeFilePath.isEmpty() ? QString() : _relativeFilePath;
+    if (!_relativeFilePath.isEmpty() && !_relativeFilePath.endsWith(QStringLiteral("/"))) {
+        _relativeFilePath += QStringLiteral("/");
+    }
 
     _originalFileName = _relativeFilePath + conflictFileName;
 
@@ -171,22 +175,24 @@ QString CaseClashFilenameDialog::caseClashConflictFile(const QString &conflictFi
 {
     const auto filePathFileInfo = QFileInfo(conflictFilePath);
     const auto conflictFileName = filePathFileInfo.fileName();
+    const auto lookingForDirectory = FileSystem::isDir(filePathFileInfo.absoluteFilePath());
 
     QDirIterator it(filePathFileInfo.path(), QDirIterator::Subdirectories);
 
     while(it.hasNext()) {
         const auto filePath = it.next();
         qCDebug(lcCaseClashConflictFialog) << filePath;
-        QFileInfo fileInfo(filePath);
 
-        if(fileInfo.isDir()) {
+        if (FileSystem::isDir(filePath) && !lookingForDirectory) {
             continue;
         }
 
-        const auto currentFileName = fileInfo.fileName();
-        if (currentFileName.compare(conflictFileName, Qt::CaseInsensitive) == 0 &&
-                currentFileName != conflictFileName) {
+        const auto currentFileName = QFileInfo(filePath).fileName();
+        if (currentFileName.compare(conflictFileName, Qt::CaseInsensitive) != 0) {
+            continue;
+        }
 
+        if (currentFileName != conflictFileName) {
             return filePath;
         }
     }
@@ -208,7 +214,7 @@ void CaseClashFilenameDialog::updateFileWidgetGroup(const QString &filePath,
     const auto fileSizeString = locale().formattedDataSize(filePathFileInfo.size());
     const auto fileUrl = QUrl::fromLocalFile(filePath).toString();
     const auto linkString = QStringLiteral("<a href='%1'>%2</a>").arg(fileUrl, linkText);
-    const auto mime = QMimeDatabase().mimeTypeForFile(_filePath);
+    const auto mime = QMimeDatabase().mimeTypeForFile(_filePath, QMimeDatabase::MatchExtension);
     QIcon fileTypeIcon;
 
     qCDebug(lcCaseClashConflictFialog) << filePath << filePathFileInfo.exists() << filename << lastModifiedString << fileSizeString << fileUrl << linkString << mime;

@@ -21,6 +21,7 @@
 #include <QSslKey>
 #include <QSslCertificate>
 
+#include "libsync/configfile.h"
 #include "networkjobs.h"
 #include "wizard/owncloudwizardcommon.h"
 #include "accountfwd.h"
@@ -32,7 +33,6 @@ Q_DECLARE_LOGGING_CATEGORY(lcWizard)
 class WelcomePage;
 class OwncloudSetupPage;
 class OwncloudHttpCredsPage;
-class OwncloudOAuthCredsPage;
 class OwncloudAdvancedSetupPage;
 class OwncloudWizardResultPage;
 class AbstractCredentials;
@@ -65,6 +65,7 @@ public:
     [[nodiscard]] QString ocUrl() const;
     [[nodiscard]] QString localFolder() const;
     [[nodiscard]] QStringList selectiveSyncBlacklist() const;
+    [[nodiscard]] bool useFlow2() const;
     [[nodiscard]] bool useVirtualFileSync() const;
     [[nodiscard]] bool isConfirmBigFolderChecked() const;
 
@@ -76,7 +77,7 @@ public:
 
     /**
      * Shows a dialog explaining the virtual files mode and warning about it
-     * being experimental. Calles the callback with true if enabling was
+     * being experimental. Calls the callback with true if enabling was
      * chosen.
      */
     static void askExperimentalVirtualFilesFeature(QWidget *receiver, const std::function<void(bool enable)> &callback);
@@ -109,9 +110,12 @@ signals:
     void needCertificate();
     void styleChanged();
     void onActivate();
+    void wizardClosed();
 
 protected:
     void changeEvent(QEvent *) override;
+    void hideEvent(QHideEvent *) override;
+    void closeEvent(QCloseEvent *) override;
 
 private:
     void customizeStyle();
@@ -122,7 +126,6 @@ private:
     WelcomePage *_welcomePage;
     OwncloudSetupPage *_setupPage;
     OwncloudHttpCredsPage *_httpCredsPage;
-    OwncloudOAuthCredsPage *_browserCredsPage;
     Flow2AuthCredsPage *_flow2CredsPage;
     OwncloudAdvancedSetupPage *_advancedSetupPage;
     OwncloudWizardResultPage *_resultPage = nullptr;
@@ -132,6 +135,8 @@ private:
     QStringList _setupLog;
 
     bool _registration = false;
+
+    bool _useFlow2 = ConfigFile().forceLoginV2();
 
     friend class OwncloudSetupWizard;
 };

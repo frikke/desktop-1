@@ -15,6 +15,15 @@
 
 #import "FinderSync.h"
 
+@interface FinderSync()
+{
+    NSMutableSet *_registeredDirectories;
+    NSString *_shareMenuTitle;
+    NSMutableDictionary *_strings;
+    NSMutableArray *_menuItems;
+    NSCondition *_menuIsComplete;
+}
+@end
 
 @implementation FinderSync
 
@@ -71,6 +80,10 @@
             NSLog(@"No socket path. Not initiating local socket client.");
             self.localSocketClient = nil;
         }
+
+        _registeredDirectories = NSMutableSet.set;
+        _strings = NSMutableDictionary.dictionary;
+        _menuIsComplete = [[NSCondition alloc] init];
     }
 
     return self;
@@ -181,10 +194,14 @@
 
 #pragma mark - SyncClientProxyDelegate implementation
 
-- (void)setResultForPath:(NSString*)path result:(NSString*)result
+- (void)setResult:(NSString *)result forPath:(NSString*)path
 {
-	NSString *normalizedPath = [path decomposedStringWithCanonicalMapping];
-	[[FIFinderSyncController defaultController] setBadgeIdentifier:result forURL:[NSURL fileURLWithPath:normalizedPath]];
+    NSString *const normalizedPath = path.decomposedStringWithCanonicalMapping;
+    NSURL *const urlForPath = [NSURL fileURLWithPath:normalizedPath];
+    if (urlForPath == nil) {
+        return;
+    }
+    [FIFinderSyncController.defaultController setBadgeIdentifier:result forURL:urlForPath];
 }
 
 - (void)reFetchFileNameCacheForPath:(NSString*)path
@@ -194,7 +211,7 @@
 
 - (void)registerPath:(NSString*)path
 {
-	assert(_registeredDirectories);
+	NSAssert(_registeredDirectories, @"Registered directories should be a valid set!");
 	[_registeredDirectories addObject:[NSURL fileURLWithPath:path]];
 	[FIFinderSyncController defaultController].directoryURLs = _registeredDirectories;
 }

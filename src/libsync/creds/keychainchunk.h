@@ -17,7 +17,9 @@
 #define KEYCHAINCHUNK_H
 
 #include <QObject>
-#include <qt5keychain/keychain.h>
+
+#include <qt6keychain/keychain.h>
+
 #include "accountfwd.h"
 
 // We don't support insecure fallback
@@ -109,7 +111,7 @@ public:
      * Call this method to start the job synchronously.
      * Awaits completion with no need to connect some slot to the finished() signal first.
      *
-     * @return Returns true on succeess (QKeychain::NoError).
+     * @return Returns true on success (QKeychain::NoError).
     */
     bool exec();
 
@@ -142,7 +144,7 @@ public:
      * Call this method to start the job synchronously.
      * Awaits completion with no need to connect some slot to the finished() signal first.
      *
-     * @return Returns true on succeess (QKeychain::NoError).
+     * @return Returns true on success (QKeychain::NoError).
     */
     bool exec();
 
@@ -180,7 +182,7 @@ public:
      * Call this method to start the job synchronously.
      * Awaits completion with no need to connect some slot to the finished() signal first.
      *
-     * @return Returns true on succeess (QKeychain::NoError).
+     * @return Returns true on success (QKeychain::NoError).
     */
     bool exec();
 

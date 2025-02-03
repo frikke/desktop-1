@@ -50,14 +50,37 @@ Q_DECLARE_LOGGING_CATEGORY(lcUtility)
  *  @{
  */
 namespace Utility {
+    struct ProcessInfosForOpenFile {
+        ulong processId;
+        QString processName;
+    };
+    /**
+     * @brief Queries the OS for processes that are keeping the file open(using it)
+     *
+     * @param filePath absolute file path
+     * @return list of ProcessInfosForOpenFile
+     */
+    OCSYNC_EXPORT QVector<ProcessInfosForOpenFile> queryProcessInfosKeepingFileOpen(const QString &filePath);
+
     OCSYNC_EXPORT int rand();
     OCSYNC_EXPORT void sleep(int sec);
     OCSYNC_EXPORT void usleep(int usec);
     OCSYNC_EXPORT QString formatFingerprint(const QByteArray &, bool colonSeparated = true);
+    /**
+     * @brief Creates the Desktop.ini file which contains the folder IconResource shown as a favorite link
+     *
+     * @param folder absolute file path to folder
+     */
     OCSYNC_EXPORT void setupFavLink(const QString &folder);
+    /**
+     * @brief Removes the Desktop.ini file which contains the folder IconResource shown as a favorite link
+     *
+     * @param folder absolute file path to folder
+     */
     OCSYNC_EXPORT void removeFavLink(const QString &folder);
+
     OCSYNC_EXPORT bool writeRandomFile(const QString &fname, int size = -1);
-    OCSYNC_EXPORT QString octetsToString(qint64 octets);
+    OCSYNC_EXPORT QString octetsToString(const qint64 octets);
     OCSYNC_EXPORT QByteArray userAgentString();
     OCSYNC_EXPORT QByteArray friendlyUserAgentString();
     /**
@@ -70,7 +93,7 @@ namespace Utility {
       */
     OCSYNC_EXPORT bool hasSystemLaunchOnStartup(const QString &appName);
     OCSYNC_EXPORT bool hasLaunchOnStartup(const QString &appName);
-    OCSYNC_EXPORT void setLaunchOnStartup(const QString &appName, const QString &guiName, bool launch);
+    OCSYNC_EXPORT void setLaunchOnStartup(const QString &appName, const QString &guiName, const bool launch);
     OCSYNC_EXPORT uint convertSizeToUint(size_t &convertVar);
     OCSYNC_EXPORT int convertSizeToInt(size_t &convertVar);
 
@@ -129,11 +152,11 @@ namespace Utility {
     OCSYNC_EXPORT bool hasDarkSystray();
 
     // convenience OS detection methods
-    inline bool isWindows();
-    inline bool isMac();
-    inline bool isUnix();
-    inline bool isLinux(); // use with care
-    inline bool isBSD(); // use with care, does not match OS X
+    constexpr bool isWindows();
+    constexpr bool isMac();
+    constexpr bool isUnix();
+    constexpr bool isLinux(); // use with care
+    constexpr bool isBSD(); // use with care, does not match OS X
 
     OCSYNC_EXPORT QString platformName();
     // crash helper for --debug
@@ -145,7 +168,7 @@ namespace Utility {
     // if false, the two cases are two different files.
     OCSYNC_EXPORT bool fsCasePreserving();
 
-    // Check if two pathes that MUST exist are equal. This function
+    // Check if two paths that MUST exist are equal. This function
     // uses QDir::canonicalPath() to judge and cares for the systems
     // case sensitivity.
     OCSYNC_EXPORT bool fileNamesEqual(const QString &fn1, const QString &fn2);
@@ -167,7 +190,7 @@ namespace Utility {
      * Use this to get a string that describes the timespan between the first and
      * the second timestamp in a human readable and understandable form.
      *
-     * If the second parameter is ommitted, the current time is used.
+     * If the second parameter is omitted, the current time is used.
      */
     OCSYNC_EXPORT QString timeAgoInWords(const QDateTime &dt, const QDateTime &from = QDateTime());
 
@@ -254,6 +277,12 @@ namespace Utility {
      * @brief Registers the desktop app as a handler for a custom URI to enable local editing
      */
     OCSYNC_EXPORT void registerUriHandlerForLocalEditing();
+    
+    OCSYNC_EXPORT QString leadingSlashPath(const QString &path);
+    OCSYNC_EXPORT QString trailingSlashPath(const QString &path);
+    OCSYNC_EXPORT QString noLeadingSlashPath(const QString &path);
+    OCSYNC_EXPORT QString noTrailingSlashPath(const QString &path);
+    OCSYNC_EXPORT QString fullRemotePathToRemoteSyncRootRelative(const QString &fullRemotePath, const QString &remoteSyncRoot);
 
 #ifdef Q_OS_WIN
     OCSYNC_EXPORT bool registryKeyExists(HKEY hRootKey, const QString &subKey);
@@ -272,11 +301,13 @@ namespace Utility {
 
     OCSYNC_EXPORT QString formatWinError(long error);
 
+    OCSYNC_EXPORT bool canCreateFileInPath(const QString &path);
+
     class OCSYNC_EXPORT NtfsPermissionLookupRAII
     {
     public:
         /**
-         * NTFS permissions lookup is diabled by default for performance reasons
+         * NTFS permissions lookup is disabled by default for performance reasons
          * Enable it and disable it again once we leave the scope
          * https://doc.qt.io/Qt-5/qfileinfo.html#ntfs-permissions
          */
@@ -291,7 +322,7 @@ namespace Utility {
 }
 /** @} */ // \addtogroup
 
-inline bool Utility::isWindows()
+inline constexpr bool Utility::isWindows()
 {
 #ifdef Q_OS_WIN
     return true;
@@ -300,7 +331,7 @@ inline bool Utility::isWindows()
 #endif
 }
 
-inline bool Utility::isMac()
+inline constexpr bool Utility::isMac()
 {
 #ifdef Q_OS_MAC
     return true;
@@ -309,7 +340,7 @@ inline bool Utility::isMac()
 #endif
 }
 
-inline bool Utility::isUnix()
+inline constexpr bool Utility::isUnix()
 {
 #ifdef Q_OS_UNIX
     return true;
@@ -318,7 +349,7 @@ inline bool Utility::isUnix()
 #endif
 }
 
-inline bool Utility::isLinux()
+inline constexpr bool Utility::isLinux()
 {
 #if defined(Q_OS_LINUX)
     return true;
@@ -327,7 +358,7 @@ inline bool Utility::isLinux()
 #endif
 }
 
-inline bool Utility::isBSD()
+inline constexpr bool Utility::isBSD()
 {
 #if defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD) || defined(Q_OS_OPENBSD)
     return true;

@@ -149,7 +149,7 @@ QString OCUpdater::statusString(UpdateStatusStringFormat format) const
 
     switch (downloadState()) {
     case Downloading:
-        return tr("Downloading %1. Please wait …").arg(updateVersion);
+        return tr("Downloading %1 …").arg(updateVersion);
     case DownloadComplete:
         return tr("%1 available. Restart application to start the update.").arg(updateVersion);
     case DownloadFailed: {
@@ -221,7 +221,7 @@ void OCUpdater::slotStartInstaller()
         };
 
         QString msiLogFile = cfg.configPath() + "msi.log";
-        QString command = QString("&{msiexec /i '%1' /L*V '%2'| Out-Null ; &'%3'}")
+        QString command = QStringLiteral("&{msiexec /i '%1' /L*V '%2'| Out-Null ; &'%3'}")
              .arg(preparePathForPowershell(updateFile))
              .arg(preparePathForPowershell(msiLogFile))
              .arg(preparePathForPowershell(QCoreApplication::applicationFilePath()));

@@ -9,6 +9,7 @@
 
 #include "folderwatcher.h"
 #include "common/utility.h"
+#include "logger.h"
 
 void touch(const QString &file)
 {
@@ -16,7 +17,7 @@ void touch(const QString &file)
     OCC::Utility::writeRandomFile(file);
 #else
     QString cmd;
-    cmd = QString("touch %1").arg(file);
+    cmd = QStringLiteral("touch %1").arg(file);
     qDebug() << "Command: " << cmd;
     system(cmd.toLocal8Bit());
 #endif
@@ -28,7 +29,7 @@ void mkdir(const QString &file)
     QDir dir;
     dir.mkdir(file);
 #else
-    QString cmd = QString("mkdir %1").arg(file);
+    QString cmd = QStringLiteral("mkdir %1").arg(file);
     qDebug() << "Command: " << cmd;
     system(cmd.toLocal8Bit());
 #endif
@@ -40,7 +41,7 @@ void rmdir(const QString &file)
     QDir dir;
     dir.rmdir(file);
 #else
-    QString cmd = QString("rmdir %1").arg(file);
+    QString cmd = QStringLiteral("rmdir %1").arg(file);
     qDebug() << "Command: " << cmd;
     system(cmd.toLocal8Bit());
 #endif
@@ -51,7 +52,7 @@ void rm(const QString &file)
 #ifdef Q_OS_WIN
     QFile::remove(file);
 #else
-    QString cmd = QString("rm %1").arg(file);
+    QString cmd = QStringLiteral("rm %1").arg(file);
     qDebug() << "Command: " << cmd;
     system(cmd.toLocal8Bit());
 #endif
@@ -62,7 +63,7 @@ void mv(const QString &file1, const QString &file2)
 #ifdef Q_OS_WIN
     QFile::rename(file1, file2);
 #else
-    QString cmd = QString("mv %1 %2").arg(file1, file2);
+    QString cmd = QStringLiteral("mv %1 %2").arg(file1, file2);
     qDebug() << "Command: " << cmd;
     system(cmd.toLocal8Bit());
 #endif
@@ -135,6 +136,14 @@ public:
     }
 
 private slots:
+    void initTestCase()
+    {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
     void init()
     {
         _pathChangedSpy->clear();
@@ -149,7 +158,7 @@ private slots:
     void testACreate() { // create a new file
         QString file(_rootPath + "/foo.txt");
         QString cmd;
-        cmd = QString("echo \"xyz\" > \"%1\"").arg(file);
+        cmd = QStringLiteral("echo \"xyz\" > \"%1\"").arg(file);
         qDebug() << "Command: " << cmd;
         system(cmd.toLocal8Bit());
 
@@ -261,6 +270,121 @@ private slots:
         QString dir(_rootPath+"/bren/newfolder2");
         mkdir(dir);
         QVERIFY(waitForPathChanged(dir));
+    }
+
+    void testDetectLockFiles()
+    {
+        QStringList listOfOfficeFiles = {QString(_rootPath + "/document.docx"), QString(_rootPath + "/document.odt")};
+        std::sort(std::begin(listOfOfficeFiles), std::end(listOfOfficeFiles));
+
+        const QStringList listOfOfficeLockFiles = {QString(_rootPath + "/.~lock.document.docx#"), QString(_rootPath + "/.~lock.document.odt#")};
+
+        _watcher->setShouldWatchForFileUnlocking(true);
+        
+        // verify that office files for locking got detected by the watcher
+        QScopedPointer<QSignalSpy> locksImposedSpy(new QSignalSpy(_watcher.data(), &FolderWatcher::filesLockImposed));
+
+        for (const auto &officeFile : listOfOfficeFiles) {
+            touch(officeFile);
+            QVERIFY(waitForPathChanged(officeFile));
+        }
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            touch(officeLockFile);
+            QVERIFY(waitForPathChanged(officeLockFile));
+        }
+
+        locksImposedSpy->wait(_watcher->lockChangeDebouncingTimout() + 100);
+        QCOMPARE(locksImposedSpy->count(), 1);
+        auto lockedOfficeFilesByWatcher = locksImposedSpy->takeFirst().at(0).value<QSet<QString>>().values();
+        std::sort(std::begin(lockedOfficeFilesByWatcher), std::end(lockedOfficeFilesByWatcher));
+        QCOMPARE(listOfOfficeFiles.size(), lockedOfficeFilesByWatcher.size());
+
+        for (int i = 0; i < listOfOfficeFiles.size(); ++i) {
+            QVERIFY(listOfOfficeFiles.at(i) == lockedOfficeFilesByWatcher.at(i));
+        }
+
+        // verify that office files for unlocking got detected by the watcher
+        QScopedPointer<QSignalSpy> locksReleasedSpy(new QSignalSpy(_watcher.data(), &FolderWatcher::filesLockReleased));
+
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            rm(officeLockFile);
+            QVERIFY(waitForPathChanged(officeLockFile));
+        }
+
+        locksReleasedSpy->wait(_watcher->lockChangeDebouncingTimout() + 100);
+        QCOMPARE(locksReleasedSpy->count(), 1);
+        auto unLockedOfficeFilesByWatcher = locksReleasedSpy->takeFirst().at(0).value<QSet<QString>>().values();
+        std::sort(std::begin(unLockedOfficeFilesByWatcher), std::end(unLockedOfficeFilesByWatcher));
+        QCOMPARE(listOfOfficeFiles.size(), unLockedOfficeFilesByWatcher.size());
+
+        for (int i = 0; i < listOfOfficeFiles.size(); ++i) {
+            QVERIFY(listOfOfficeFiles.at(i) == unLockedOfficeFilesByWatcher.at(i));
+        }
+
+        // cleanup
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            rm(officeLockFile);
+        }
+        for (const auto &officeFile : listOfOfficeFiles) {
+            rm(officeFile);
+        }
+    }
+    void testDetectLockFilesExternally()
+    {
+        QStringList listOfOfficeFiles = {QString(_rootPath + "/document.docx"), QString(_rootPath + "/document.odt")};
+        std::sort(std::begin(listOfOfficeFiles), std::end(listOfOfficeFiles));
+
+        const QStringList listOfOfficeLockFiles = {QString(_rootPath + "/.~lock.document.docx#"), QString(_rootPath + "/.~lock.document.odt#")};
+
+        for (const auto &officeFile : listOfOfficeFiles) {
+            touch(officeFile);
+        }
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            touch(officeLockFile);
+        }
+
+        _watcher.reset(new FolderWatcher);
+        _watcher->init(_rootPath);
+        _watcher->setShouldWatchForFileUnlocking(true);
+        _pathChangedSpy.reset(new QSignalSpy(_watcher.data(), &FolderWatcher::pathChanged));
+        QScopedPointer<QSignalSpy> locksImposedSpy(new QSignalSpy(_watcher.data(), &FolderWatcher::filesLockImposed));
+        QScopedPointer<QSignalSpy> locksReleasedSpy(new QSignalSpy(_watcher.data(), &FolderWatcher::filesLockReleased));
+
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            _watcher->slotLockFileDetectedExternally(officeLockFile);
+        }
+
+        // locked files detected
+        locksImposedSpy->wait(_watcher->lockChangeDebouncingTimout() + 100);
+        QCOMPARE(locksImposedSpy->count(), 1);
+        auto lockedOfficeFilesByWatcher = locksImposedSpy->takeFirst().at(0).value<QSet<QString>>().values();
+        std::sort(std::begin(lockedOfficeFilesByWatcher), std::end(lockedOfficeFilesByWatcher));
+        QCOMPARE(listOfOfficeFiles.size(), lockedOfficeFilesByWatcher.size());
+        for (int i = 0; i < listOfOfficeFiles.size(); ++i) {
+            QVERIFY(listOfOfficeFiles.at(i) == lockedOfficeFilesByWatcher.at(i));
+        }
+
+        // unlocked files detected
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            rm(officeLockFile);
+        }
+        locksReleasedSpy->wait(_watcher->lockChangeDebouncingTimout() + 100);
+        QCOMPARE(locksReleasedSpy->count(), 1);
+        auto unLockedOfficeFilesByWatcher = locksReleasedSpy->takeFirst().at(0).value<QSet<QString>>().values();
+        std::sort(std::begin(unLockedOfficeFilesByWatcher), std::end(unLockedOfficeFilesByWatcher));
+        QCOMPARE(listOfOfficeFiles.size(), unLockedOfficeFilesByWatcher.size());
+
+        for (int i = 0; i < listOfOfficeFiles.size(); ++i) {
+            QVERIFY(listOfOfficeFiles.at(i) == unLockedOfficeFilesByWatcher.at(i));
+        }
+
+        // cleanup
+        for (const auto &officeFile : listOfOfficeFiles) {
+            rm(officeFile);
+        }
+        for (const auto &officeLockFile : listOfOfficeLockFiles) {
+            rm(officeLockFile);
+        }
     }
 };
 

@@ -43,6 +43,14 @@ signals:
     void incomingShareDeleted();
 
 private slots:
+    void initTestCase()
+    {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
     void testDeleteEncryptedFiles()
     {
         FakeFolder fakeFolder{FileInfo::A12_B12_C12_S12()};
@@ -123,7 +131,7 @@ private slots:
         // the server, let's just manually set the encryption bool in the folder journal
         SyncJournalFileRecord rec;
         QVERIFY(folder->journalDb()->getFileRecord(QStringLiteral("encrypted"), &rec));
-        rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV1_2;
+        rec._e2eEncryptionStatus = SyncJournalFileRecord::EncryptionStatus::EncryptedMigratedV2_0;
         rec._path = QStringLiteral("encrypted").toUtf8();
         rec._type = CSyncEnums::ItemTypeDirectory;
         QVERIFY(folder->journalDb()->setFileRecord(rec));
@@ -280,7 +288,6 @@ private slots:
             QVERIFY(!folder->isSyncRunning());
         }
 
-
         // those should be allowed
         // QString FolderMan::checkPathValidityForNewFolder(const QString& path, const QUrl &serverUrl, bool forNewDirectory).second
 
@@ -303,15 +310,15 @@ private slots:
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1", url2).second.isNull());
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/ownCloud2/", url2).second.isNull());
 
-        // Now it will work because the account is different
+        // The following both fail because they are already sync folders even if for another account
         QUrl url3("http://anotherexample.org");
         url3.setUserName("dummy");
-        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1", url3).second, QString());
-        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/ownCloud2/", url3).second, QString());
+        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1", url3).second, QString("The folder %1 is used in a folder sync connection!").arg(QDir::toNativeSeparators(dirPath + "/sub/ownCloud1")));
+        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/ownCloud2", url3).second, QString("The folder %1 is used in a folder sync connection!").arg(QDir::toNativeSeparators(dirPath + "/ownCloud2")));
 
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath).second.isNull());
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1/folder").second.isNull());
-        QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1/folder/f").second.isNull());
+        QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/sub/ownCloud1/f").second.isNull());
 
 #ifndef Q_OS_WIN // no links on windows, no permissions
         // make a bunch of links
@@ -330,7 +337,7 @@ private slots:
         // link 3 points to an existing sync folder. To make it fail, the account must be the same
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/link3", url2).second.isNull());
         // while with a different account, this is fine
-        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/link3", url3).second, QString());
+        QCOMPARE(folderman->checkPathValidityForNewFolder(dirPath + "/link3", url3).second, QString("The folder %1 is used in a folder sync connection!").arg(dirPath + "/link3"));
 
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/link4").second.isNull());
         QVERIFY(!folderman->checkPathValidityForNewFolder(dirPath + "/link3/folder").second.isNull());

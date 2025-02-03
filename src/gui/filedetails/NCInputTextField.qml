@@ -12,12 +12,12 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 
 TextField {
     id: root
@@ -25,20 +25,13 @@ TextField {
     readonly property color accentColor: Style.ncBlue
     readonly property color secondaryColor: palette.dark
     readonly property alias submitButton: submitButton
+    property bool validInput: true
 
-    implicitHeight: Style.talkReplyTextFieldPreferredHeight
+    implicitHeight: Math.max(Style.talkReplyTextFieldPreferredHeight, contentHeight)
 
     rightPadding: submitButton.width
 
     selectByMouse: true
-
-    background: Rectangle {
-        id: textFieldBorder
-        radius: Style.slightlyRoundedButtonRadius
-        border.width: Style.normalBorderWidth
-        border.color: root.activeFocus ? root.accentColor : root.secondaryColor
-        color: palette.base
-    }
 
     Button {
         id: submitButton
@@ -55,9 +48,11 @@ TextField {
         icon.source: "image://svgimage-custom-color/confirm.svg" + "/" + root.secondaryColor
         icon.color: hovered && enabled ? UserModel.currentUser.accentColor : root.secondaryColor
 
-        enabled: root.text !== ""
+        enabled: root.text !== "" && root.validInput
 
         onClicked: root.accepted()
     }
+
+    verticalAlignment: Qt.AlignVCenter
 }
 

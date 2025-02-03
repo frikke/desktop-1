@@ -1,17 +1,10 @@
 project(gui)
-find_package(Qt5 REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 Xml Network)
-find_package(KF5Archive REQUIRED)
+find_package(Qt${QT_MAJOR_VERSION} REQUIRED COMPONENTS Widgets Svg Qml Quick QuickControls2 QuickWidgets Xml Network)
+find_package(KF6Archive REQUIRED)
+find_package(KF6GuiAddons)
 
-if(QUICK_COMPILER)
-        find_package(Qt5QuickCompiler)
-        set_package_properties(Qt5QuickCompiler PROPERTIES
-                DESCRIPTION "Compile QML at build time"
-                TYPE REQUIRED
-        )
-endif()
-
-if (NOT TARGET Qt5::GuiPrivate)
-    message(FATAL_ERROR "Could not find GuiPrivate component of Qt5. It might be shipped as a separate package, please check that.")
+if (NOT TARGET Qt::GuiPrivate)
+    message(FATAL_ERROR "Could not find GuiPrivate component of Qt. It might be shipped as a separate package, please check that.")
 endif()
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
@@ -39,27 +32,22 @@ set(client_UI_SRCS
     ignorelisttablewidget.ui
     networksettings.ui
     settingsdialog.ui
-    shareuserline.ui
     sslerrordialog.ui
     addcertificatedialog.ui
     passwordinputdialog.ui
     proxyauthdialog.ui
     mnemonicdialog.ui
+    vfsdownloaderrordialog.ui
     wizard/flow2authwidget.ui
     wizard/owncloudadvancedsetuppage.ui
     wizard/owncloudconnectionmethoddialog.ui
     wizard/owncloudhttpcredspage.ui
-    wizard/owncloudoauthcredspage.ui
     wizard/owncloudsetupnocredspage.ui
     wizard/webview.ui
     wizard/welcomepage.ui
 )
 
-if(QUICK_COMPILER)
-    qtquick_compiler_add_resources(client_UI_SRCS ../../resources.qrc ${CMAKE_SOURCE_DIR}/theme.qrc)
-else()
-    qt_add_resources(client_UI_SRCS ../../resources.qrc ${CMAKE_SOURCE_DIR}/theme.qrc)
-endif()
+qt_add_resources(client_UI_SRCS ../../resources.qrc ${CMAKE_SOURCE_DIR}/theme.qrc)
 
 set(client_SRCS
     accountmanager.h
@@ -88,6 +76,8 @@ set(client_SRCS
     editlocallyjob.cpp
     editlocallymanager.h
     editlocallymanager.cpp
+    editlocallyverificationjob.h
+    editlocallyverificationjob.cpp
     filetagmodel.h
     filetagmodel.cpp
     folder.h
@@ -160,6 +150,8 @@ set(client_SRCS
     thumbnailjob.cpp
     userinfo.h
     userinfo.cpp
+    vfsdownloaderrordialog.h
+    vfsdownloaderrordialog.cpp
     accountstate.h
     accountstate.cpp
     addcertificatedialog.h
@@ -190,6 +182,8 @@ set(client_SRCS
     syncconflictsmodel.cpp
     fileactivitylistmodel.h
     fileactivitylistmodel.cpp
+    filedetails/datefieldbackend.h
+    filedetails/datefieldbackend.cpp
     filedetails/filedetails.h
     filedetails/filedetails.cpp
     filedetails/sharemodel.h
@@ -223,8 +217,6 @@ set(client_SRCS
     creds/credentialsfactory.cpp
     creds/httpcredentialsgui.h
     creds/httpcredentialsgui.cpp
-    creds/oauth.h
-    creds/oauth.cpp
     creds/flow2auth.h
     creds/flow2auth.cpp
     creds/webflowcredentials.h
@@ -241,8 +233,6 @@ set(client_SRCS
     wizard/owncloudconnectionmethoddialog.cpp
     wizard/owncloudhttpcredspage.h
     wizard/owncloudhttpcredspage.cpp
-    wizard/owncloudoauthcredspage.h
-    wizard/owncloudoauthcredspage.cpp
     wizard/flow2authcredspage.h
     wizard/flow2authcredspage.cpp
     wizard/flow2authwidget.h
@@ -261,7 +251,7 @@ set(client_SRCS
     wizard/linklabel.cpp
     )
 
-if (Qt5WebEngine_FOUND AND Qt5WebEngineWidgets_FOUND)
+if (WITH_WEBENGINE)
   list(APPEND client_SRCS
     wizard/webviewpage.h
     wizard/webviewpage.cpp
@@ -283,20 +273,52 @@ endif()
 
 IF( APPLE )
     list(APPEND client_SRCS cocoainitializer_mac.mm)
-    list(APPEND client_SRCS systray.mm)
+    list(APPEND client_SRCS systray_mac_common.mm)
+
+    list(APPEND client_SRCS systray_mac_usernotifications.mm)
 
     if (BUILD_FILE_PROVIDER_MODULE)
         list(APPEND client_SRCS
+            # Symlinks to files in shell_integration/MacOSX/NextcloudIntegration/
+            macOS/ClientCommunicationProtocol.h
+            # End of symlink files
             macOS/fileprovider.h
             macOS/fileprovider_mac.mm
             macOS/fileproviderdomainmanager.h
             macOS/fileproviderdomainmanager_mac.mm
+            macOS/fileproviderdomainsyncstatus.h
+            macOS/fileproviderdomainsyncstatus_mac.mm
+            macOS/fileprovidereditlocallyjob.h
+            macOS/fileprovidereditlocallyjob.cpp
+            macOS/fileprovidereditlocallyjob_mac.mm
+            macOS/fileprovideritemmetadata.h
+            macOS/fileprovideritemmetadata.cpp
+            macOS/fileprovideritemmetadata_mac.mm
+            macOS/fileprovidermaterialiseditemsmodel.h
+            macOS/fileprovidermaterialiseditemsmodel.cpp
+            macOS/fileprovidermaterialiseditemsmodel_mac.mm
+            macOS/fileprovidersettingscontroller.h
+            macOS/fileprovidersettingscontroller_mac.mm
             macOS/fileprovidersocketcontroller.h
             macOS/fileprovidersocketcontroller.cpp
             macOS/fileprovidersocketserver.h
             macOS/fileprovidersocketserver.cpp
-            macOS/fileprovidersocketserver_mac.mm)
+            macOS/fileprovidersocketserver_mac.mm
+            macOS/fileproviderstorageuseenumerationobserver.h
+            macOS/fileproviderstorageuseenumerationobserver.m
+            macOS/fileproviderutils.h
+            macOS/fileproviderutils_mac.mm
+            macOS/fileproviderxpc.h
+            macOS/fileproviderxpc_mac.mm
+            macOS/fileproviderxpc_mac_utils.h
+            macOS/fileproviderxpc_mac_utils.mm
+            macOS/progressobserver.h
+            macOS/progressobserver.m)
     endif()
+
+    list(APPEND client_SRCS foregroundbackground_interface.h)
+    list(APPEND client_SRCS foregroundbackground_mac.mm)
+    list(APPEND client_SRCS foregroundbackground_cocoa.mm)
 
     if(SPARKLE_FOUND AND BUILD_UPDATER)
         # Define this, we need to check in updater.cpp
@@ -305,7 +327,7 @@ IF( APPLE )
         list(APPEND updater_DEPS ${SPARKLE_LIBRARY})
 
         # Sparkle.framework is installed from here because macdeployqt's CopyFramework breaks on this bundle
-        # as its logic is tightly tailored around Qt5 frameworks
+        # as its logic is tightly tailored around Qt frameworks
         install(DIRECTORY "${SPARKLE_LIBRARY}"
                 DESTINATION "${OWNCLOUD_OSX_BUNDLE}/Contents/Frameworks" USE_SOURCE_PERMISSIONS)
 
@@ -350,9 +372,9 @@ else()
    set_property(SOURCE ../3rdparty/qtlockedfile/qtlockedfile_win.cpp PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
 endif()
 
-find_package(Qt5LinguistTools)
-if(Qt5LinguistTools_FOUND)
-    qt5_add_translation(client_I18N ${TRANSLATIONS})
+find_package(Qt${QT_VERSION_MAJOR} ${REQUIRED_QT_VERSION} COMPONENTS LinguistTools)
+if(Qt${QT_MAJOR_VERSION}LinguistTools_FOUND)
+    qt_add_translation(client_I18N ${TRANSLATIONS})
 endif()
 
 IF( WIN32 )
@@ -375,8 +397,8 @@ set( final_src
     ${3rdparty_MOC}
 )
 
-if(Qt5Keychain_FOUND)
-    list(APPEND libsync_LINK_TARGETS qt5keychain)
+if(Qt${QT_MAJOR_VERSION}Keychain_FOUND)
+    list(APPEND libsync_LINK_TARGETS Qt6::keychain)
 endif()
 
 # add executable icon on windows and osx
@@ -529,16 +551,25 @@ add_library(nextcloudCore STATIC ${final_src})
 target_link_libraries(nextcloudCore
   PUBLIC
   Nextcloud::sync
-  Qt5::Widgets
-  Qt5::GuiPrivate
-  Qt5::Svg
-  Qt5::Network
-  Qt5::Xml
-  Qt5::Qml
-  Qt5::Quick
-  Qt5::QuickControls2
-  KF5::Archive
+  Qt::Widgets
+  Qt::GuiPrivate
+  Qt::Svg
+  Qt::Network
+  Qt::Xml
+  Qt::Qml
+  Qt::Quick
+  Qt::QuickControls2
+  Qt::QuickWidgets
+  KF6::Archive
   )
+
+if(KF6GuiAddons_FOUND)
+  target_link_libraries(nextcloudCore
+    PUBLIC
+    KF6::GuiAddons
+  )
+  add_definitions(-DHAVE_KGUIADDONS)
+endif()
 
 add_subdirectory(socketapi)
 
@@ -552,8 +583,8 @@ foreach(FILE IN LISTS client_UI_SRCS)
 	set_property(SOURCE ${FILE} PROPERTY SKIP_UNITY_BUILD_INCLUSION ON)
 endforeach()
 
-if(Qt5WebEngine_FOUND AND Qt5WebEngineWidgets_FOUND)
-  target_link_libraries(nextcloudCore PUBLIC Qt5::WebEngineWidgets)
+if(WITH_WEBENGINE)
+    target_link_libraries(nextcloudCore PUBLIC Qt::WebEngineWidgets Qt::WebEngineCore)
 endif()
 
 set_target_properties(nextcloudCore
@@ -611,7 +642,7 @@ else()
 
     set (QM_DIR ${OWNCLOUD_OSX_BUNDLE}/Contents/Resources/Translations)
     install(FILES ${client_I18N} DESTINATION ${QM_DIR})
-    get_target_property(_qmake Qt5::qmake LOCATION)
+    get_target_property(_qmake Qt::qmake LOCATION)
     execute_process(COMMAND ${_qmake} -query QT_INSTALL_TRANSLATIONS
         OUTPUT_VARIABLE QT_TRANSLATIONS_DIR
         OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -626,7 +657,7 @@ endif()
 
 IF(BUILD_UPDATER)
     add_library(updater STATIC ${updater_SRCS})
-    target_link_libraries(updater Nextcloud::sync ${updater_DEPS} Qt5::Widgets Qt5::Svg Qt5::Network Qt5::Xml)
+    target_link_libraries(updater Nextcloud::sync ${updater_DEPS} Qt::Widgets Qt::Svg Qt::Network Qt::Xml)
     target_include_directories(updater PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
     set_target_properties(updater PROPERTIES AUTOMOC ON)
     target_link_libraries(nextcloudCore PUBLIC updater)
@@ -659,22 +690,26 @@ if(TARGET PkgConfig::CLOUDPROVIDERS)
       PkgConfig::GLIB2
       PkgConfig::GIO
     )
+
+    list(APPEND LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS "Implements=org.freedesktop.CloudProviders\n")
+    list(APPEND LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS "[org.freedesktop.CloudProviders]")
+    list(APPEND LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS "BusName=${LIBCLOUDPROVIDERS_DBUS_BUS_NAME}")
+    list(APPEND LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS "ObjectPath=${LIBCLOUDPROVIDERS_DBUS_OBJECT_PATH}")
+    list(JOIN LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS "\n" LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS)
 endif()
 
 ## handle DBUS for Fdo notifications
 if( UNIX AND NOT APPLE )
-    find_package(Qt5 COMPONENTS DBus)
-    target_link_libraries(nextcloudCore PUBLIC Qt5::DBus)
+    find_package(Qt${QT_VERSION_MAJOR} ${REQUIRED_QT_VERSION} COMPONENTS DBus)
+    target_link_libraries(nextcloudCore PUBLIC Qt::DBus)
     target_compile_definitions(nextcloudCore PUBLIC "USE_FDO_NOTIFICATIONS")
 endif()
 
 if (APPLE)
-    find_package(Qt5 COMPONENTS MacExtras)
-
     if (BUILD_FILE_PROVIDER_MODULE)
-        target_link_libraries(nextcloudCore PUBLIC Qt5::MacExtras "-framework UserNotifications -framework FileProvider")
+        target_link_libraries(nextcloudCore PUBLIC "-framework UserNotifications -framework FileProvider")
     else()
-        target_link_libraries(nextcloudCore PUBLIC Qt5::MacExtras "-framework UserNotifications")
+        target_link_libraries(nextcloudCore PUBLIC "-framework UserNotifications")
     endif()
 endif()
 
@@ -694,6 +729,9 @@ install(TARGETS nextcloud
         BUNDLE  DESTINATION "."
  )
 
+if (WIN32)
+    install(FILES $<TARGET_PDB_FILE:nextcloud> DESTINATION bin OPTIONAL)
+endif()
 
 # FIXME: The following lines are dup in src/gui and src/cmd because it needs to be done after both are installed
 #FIXME: find a nice solution to make the second if(BUILD_OWNCLOUD_OSX_BUNDLE) unnecessary
@@ -702,7 +740,7 @@ install(TARGETS nextcloud
 #
 # OSX: Run macdeployqt for src/gui and for src/cmd using the -executable option
 if(BUILD_OWNCLOUD_OSX_BUNDLE AND NOT BUILD_LIBRARIES_ONLY)
-    get_target_property (QT_QMAKE_EXECUTABLE Qt5::qmake IMPORTED_LOCATION)
+    get_target_property (QT_QMAKE_EXECUTABLE Qt::qmake IMPORTED_LOCATION)
     get_filename_component(QT_BIN_DIR "${QT_QMAKE_EXECUTABLE}" DIRECTORY)
     find_program(MACDEPLOYQT_EXECUTABLE macdeployqt HINTS "${QT_BIN_DIR}")
 

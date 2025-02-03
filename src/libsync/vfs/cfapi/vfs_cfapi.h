@@ -43,9 +43,13 @@ public:
 
     Result<void, QString> updateMetadata(const QString &filePath, time_t modtime, qint64 size, const QByteArray &fileId) override;
 
+    Result<Vfs::ConvertToPlaceholderResult, QString> updatePlaceholderMarkInSync(const QString &filePath, const QByteArray &fileId) override;
+
+    [[nodiscard]] bool isPlaceHolderInSync(const QString &filePath) const override;
+
     Result<void, QString> createPlaceholder(const SyncFileItem &item) override;
     Result<void, QString> dehydratePlaceholder(const SyncFileItem &item) override;
-    Result<Vfs::ConvertToPlaceholderResult, QString> convertToPlaceholder(const QString &filename, const SyncFileItem &item, const QString &replacesFile) override;
+    Result<Vfs::ConvertToPlaceholderResult, QString> convertToPlaceholder(const QString &filename, const SyncFileItem &item, const QString &replacesFile, UpdateMetadataTypes updateType) override;
 
     bool needsMetadataUpdate(const SyncFileItem &) override;
     bool isDehydratedPlaceholder(const QString &filePath) override;
@@ -53,7 +57,7 @@ public:
 
     bool setPinState(const QString &folderPath, PinState state) override;
     Optional<PinState> pinState(const QString &folderPath) override;
-    AvailabilityResult availability(const QString &folderPath) override;
+    AvailabilityResult availability(const QString &folderPath, const AvailabilityRecursivity recursiveCheck) override;
 
     void cancelHydration(const QString &requestId, const QString &path);
 
@@ -75,6 +79,9 @@ private:
     void scheduleHydrationJob(const QString &requestId, const QString &folderPath, const SyncJournalFileRecord &record);
     void onHydrationJobFinished(HydrationJob *job);
     HydrationJob *findHydrationJob(const QString &requestId) const;
+
+    bool setPinStateLocal(const QString &localPath, PinState state);
+    [[nodiscard]] Optional<PinState> pinStateLocal(const QString &localPath) const;
 
     struct HasHydratedDehydrated {
         bool hasHydrated = false;

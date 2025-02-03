@@ -29,7 +29,7 @@
 
 -(void)process:(NSString*)line
 {
-    NSLog(@"Processing line: %@", line);
+    NSLog(@"Processing line: '%@'", line);
     NSArray *split = [line componentsSeparatedByString:@":"];
     NSString *command = [split objectAtIndex:0];
     
@@ -42,7 +42,7 @@
         
         dispatch_async(dispatch_get_main_queue(), ^{
             NSLog(@"Setting result %@ for path %@", result, path);
-            [self.delegate setResultForPath:path result:result];
+            [self.delegate setResult:result forPath:path];
         });
     } else if([command isEqualToString:@"UPDATE_VIEW"]) {
         NSString *path = [split objectAtIndex:1];
@@ -94,8 +94,8 @@
             [self.delegate addMenuItem:item];
         });
     } else {
-        // LOG UNKOWN COMMAND
-        NSLog(@"Unkown command: %@", command);
+        // LOG UNKNOWN COMMAND
+        NSLog(@"Unknown command: %@", command);
     }
 }
 

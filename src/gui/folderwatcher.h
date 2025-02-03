@@ -27,8 +27,7 @@
 #include <QScopedPointer>
 #include <QSet>
 #include <QDir>
-
-class QTimer;
+#include <QTimer>
 
 namespace OCC {
 
@@ -50,6 +49,7 @@ class Folder;
 class FolderWatcher : public QObject
 {
     Q_OBJECT
+
 public:
     // Construct, connect signals, call init()
     explicit FolderWatcher(Folder *folder = nullptr);
@@ -59,9 +59,6 @@ public:
      * @param root Path of the root of the folder
      */
     void init(const QString &root);
-
-    /* Check if the path is ignored. */
-    bool pathIsIgnored(const QString &path);
 
     /**
      * Returns false if the folder watcher can't be trusted to capture all
@@ -83,6 +80,11 @@ public:
     /// For testing linux behavior only
     [[nodiscard]] int testLinuxWatchCount() const;
 
+    void slotLockFileDetectedExternally(const QString &lockFile);
+
+    void setShouldWatchForFileUnlocking(bool shouldWatchForFileUnlocking);
+    [[nodiscard]] int lockChangeDebouncingTimout() const;
+
 signals:
     /** Emitted when one of the watched directories or one
      *  of the contained files is changed. */
@@ -92,6 +94,13 @@ signals:
     * Emitted when lock files were removed
     */
     void filesLockReleased(const QSet<QString> &files);
+
+    /*
+     * Emitted when lock files were added
+     */
+    void filesLockImposed(const QSet<QString> &files);
+
+    void lockedFilesFound(const QSet<QString> &files);
 
     /**
      * Emitted if some notifications were lost.
@@ -117,6 +126,7 @@ protected slots:
 
 private slots:
     void startNotificationTestWhenReady();
+    void lockChangeDebouncingTimerTimedOut();
 
 protected:
     QHash<QString, int> _pendingPathes;
@@ -132,11 +142,16 @@ private:
 
     void appendSubPaths(QDir dir, QStringList& subPaths);
 
-    QString possiblyAddUnlockedFilePath(const QString &path);
-    QString findMatchingUnlockedFileInDir(const QString &dirPath, const QString &lockFileName);
+    /* Check if the path should be ignored by the FolderWatcher. */
+    [[nodiscard]] bool pathIsIgnored(const QString &path) const;
 
     /** Path of the expected test notification */
     QString _testNotificationPath;
+
+    QSet<QString> _unlockedFiles;
+    QSet<QString> _lockedFiles;
+
+    QTimer _lockChangeDebouncingTimer;
 
     friend class FolderWatcherPrivate;
 };

@@ -12,13 +12,13 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Window 2.15
-import QtQuick.Layouts 1.2
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Window
+import QtQuick.Layouts
+import QtQuick.Controls
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 import "../tray"
 import "../"
 
@@ -31,10 +31,12 @@ ColumnLayout {
     property int horizontalPadding: 0
     property int iconSize: 32
     property bool backgroundsVisible: true
+    property color accentColor: Style.ncBlue
 
     readonly property bool sharingPossible: shareModel && shareModel.canShare && shareModel.sharingEnabled
     readonly property bool userGroupSharingPossible: sharingPossible && shareModel.userGroupSharingEnabled
     readonly property bool publicLinkSharingPossible: sharingPossible && shareModel.publicLinkSharesEnabled
+    readonly property bool serverAllowsResharing: shareModel && shareModel.serverAllowsResharing
 
     readonly property bool loading: sharingPossible && (!shareModel ||
                                                         shareModel.fetchOngoing ||
@@ -94,6 +96,7 @@ ColumnLayout {
         closePolicy: Popup.NoAutoClose
 
         visible: false
+        onAboutToShow: dialogPasswordField.text = shareModel.generatePassword()
 
         onAccepted: {
             if(sharee) {
@@ -136,14 +139,43 @@ ColumnLayout {
         }
     }
 
-    ShareeSearchField {
-        id: shareeSearchField
+    RowLayout {
         Layout.fillWidth: true
         Layout.leftMargin: root.horizontalPadding
         Layout.rightMargin: root.horizontalPadding
 
+        Image {
+            Layout.preferredWidth: 32
+            Layout.preferredHeight: 32
+            source: shareModel.shareOwnerAvatar
+        }
+
+        ColumnLayout {
+            EnforcedPlainTextLabel {
+                Layout.fillWidth: true
+                visible: shareModel.displayShareOwner
+                text: qsTr("Shared with you by %1").arg(shareModel.shareOwnerDisplayName)
+                font.bold: true
+            }
+            EnforcedPlainTextLabel {
+                Layout.fillWidth: true
+                visible: shareModel.sharedWithMeExpires
+                text: qsTr("Expires in %1").arg(shareModel.sharedWithMeRemainingTimeString)
+            }
+        }
+
+        visible: shareModel.displayShareOwner
+    }
+
+    ShareeSearchField {
+        id: shareeSearchField
+        Layout.fillWidth: true
+        Layout.topMargin: Style.smallSpacing
+        Layout.leftMargin: root.horizontalPadding
+        Layout.rightMargin: root.horizontalPadding
+
         visible: root.userGroupSharingPossible
-        enabled: visible && !root.loading
+        enabled: visible && !root.loading && !root.shareModel.isShareDisabledEncryptedFolder && !shareeSearchField.isShareeFetchOngoing
 
         accountState: root.accountState
         shareItemIsFolder: root.fileDetails && root.fileDetails.isFolder
@@ -213,7 +245,9 @@ ColumnLayout {
                     fileDetails: root.fileDetails
                     rootStackView: root.rootStackView
                     backgroundsVisible: root.backgroundsVisible
+                    accentColor: root.accentColor
                     canCreateLinkShares: root.publicLinkSharingPossible
+                    serverAllowsResharing: root.serverAllowsResharing
 
                     onCreateNewLinkShare: {
                         root.waitingForSharesToChange = true;
@@ -245,12 +279,13 @@ ColumnLayout {
                     z: Infinity
 
                     sourceComponent: Rectangle {
-                        color: palette.window
+                        color: palette.base
+                        radius: Style.progressBarRadius
                         opacity: 0.5
 
                         NCBusyIndicator {
                             anchors.centerIn: parent
-                            color: palette.midlight
+                            color: palette.dark
                         }
                     }
                 }
@@ -277,7 +312,6 @@ ColumnLayout {
                 id: sharingDisabledLabel
                 width: parent.width
                 text: qsTr("Sharing is disabled")
-                color: palette.midlight
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -285,7 +319,6 @@ ColumnLayout {
             EnforcedPlainTextLabel {
                 width: parent.width
                 text: qsTr("This item cannot be shared.")
-                color: palette.midlight
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
@@ -294,7 +327,6 @@ ColumnLayout {
             EnforcedPlainTextLabel {
                 width: parent.width
                 text: qsTr("Sharing is disabled.")
-                color: palette.midlight
                 wrapMode: Text.Wrap
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter

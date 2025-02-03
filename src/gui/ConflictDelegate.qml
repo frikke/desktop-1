@@ -12,12 +12,12 @@
  * for more details.
  */
 
-import QtQml 2.15
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
-import Style 1.0
-import com.nextcloud.desktopclient 1.0
+import QtQml
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
+import Style
+import com.nextcloud.desktopclient
 import "./tray"
 
 Item {
@@ -57,14 +57,14 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            itemSelected: root.existingSelected
-            itemPreviewUrl: root.existingPreviewUrl
+            itemSelected: root.conflictSelected
+            itemPreviewUrl: root.conflictPreviewUrl
             itemVersionLabel: qsTr('Local version')
-            itemDateLabel: root.existingDate
-            itemFileSizeLabel: root.existingSize
+            itemDateLabel: root.conflictDate
+            itemFileSizeLabel: root.conflictSize
 
             onSelectedChanged: function() {
-                model.existingSelected = itemSelected
+                model.conflictSelected = itemSelected
             }
         }
 
@@ -72,14 +72,14 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
-            itemSelected: root.conflictSelected
-            itemPreviewUrl: root.conflictPreviewUrl
+            itemSelected: root.existingSelected
+            itemPreviewUrl: root.existingPreviewUrl
             itemVersionLabel: qsTr('Server version')
-            itemDateLabel: root.conflictDate
-            itemFileSizeLabel: root.conflictSize
+            itemDateLabel: root.existingDate
+            itemFileSizeLabel: root.existingSize
 
             onSelectedChanged: function() {
-                model.conflictSelected = itemSelected
+                model.existingSelected = itemSelected
             }
         }
     }

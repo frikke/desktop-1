@@ -15,7 +15,6 @@
  */
 
 #include <iostream>
-#include <random>
 #include <qcoreapplication.h>
 #include <QStringList>
 #include <QUrl>
@@ -316,7 +315,7 @@ int main(int argc, char **argv)
 
 #ifdef Q_OS_WIN
     // Ensure OpenSSL config file is only loaded from app directory
-    QString opensslConf = QCoreApplication::applicationDirPath() + QString("/openssl.cnf");
+    QString opensslConf = QCoreApplication::applicationDirPath() + QStringLiteral("/openssl.cnf");
     qputenv("OPENSSL_CONF", opensslConf.toLocal8Bit());
 #endif
 
@@ -345,14 +344,17 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
 
-    if (options.target_url.contains("/webdav", Qt::CaseInsensitive) || options.target_url.contains("/dav", Qt::CaseInsensitive)) {
+    const auto sanitisedTargetUrl = options.target_url.endsWith('/') || options.target_url.endsWith('\\') 
+        ? options.target_url.chopped(1) 
+        : options.target_url;
+    QUrl hostUrl = QUrl::fromUserInput(sanitisedTargetUrl);
+
+    if (const auto hostUrlPath = hostUrl.path(); hostUrlPath.contains("/webdav", Qt::CaseInsensitive) || hostUrlPath.contains("/dav", Qt::CaseInsensitive)) {
         qWarning("Dav or webdav in server URL.");
         std::cerr << "Error! Please specify only the base URL of your host with username and password. Example:" << std::endl
-                  << "http(s)://username:password@cloud.example.com" << std::endl;
+                  << "https://username:password@cloud.example.com" << std::endl;
         return EXIT_FAILURE;
     }
-
-    QUrl hostUrl = QUrl::fromUserInput((options.target_url.endsWith(QLatin1Char('/')) || options.target_url.endsWith(QLatin1Char('\\'))) ? options.target_url.chopped(1) : options.target_url);
 
     // Order of retrieval attempt (later attempts override earlier ones):
     // 1. From URL
@@ -442,12 +444,40 @@ int main(int argc, char **argv)
     account->setTrustCertificates(options.trustSSL);
 
     QEventLoop loop;
+    auto *csjob = new CheckServerJob(account);
+    csjob->setIgnoreCredentialFailure(true);
+    QObject::connect(csjob, &CheckServerJob::instanceFound, [&](const QUrl &, const QJsonObject &info) {
+        // see ConnectionValidator::slotCapabilitiesRecieved: only set server version if not empty
+        QString serverVersion = CheckServerJob::version(info);
+        if (!serverVersion.isEmpty()) {
+            account->setServerVersion(serverVersion);
+        }
+        loop.quit();
+    });
+    QObject::connect(csjob, &CheckServerJob::instanceNotFound, [&]() {
+        loop.quit();
+    });
+    QObject::connect(csjob, &CheckServerJob::timeout, [&](const QUrl &) {
+        loop.quit();
+    });
+    csjob->start();
+    loop.exec();
+
+    if (csjob->reply()->error() != QNetworkReply::NoError){
+        std::cout<<"Error connecting to server for status\n";
+        return EXIT_FAILURE;
+    }
+
     auto *job = new JsonApiJob(account, QLatin1String("ocs/v1.php/cloud/capabilities"));
     QObject::connect(job, &JsonApiJob::jsonReceived, [&](const QJsonDocument &json) {
         auto caps = json.object().value("ocs").toObject().value("data").toObject().value("capabilities").toObject();
         qDebug() << "Server capabilities" << caps;
         account->setCapabilities(caps.toVariantMap());
-        account->setServerVersion(caps["core"].toObject()["status"].toObject()["version"].toString());
+        // see ConnectionValidator::slotCapabilitiesRecieved: only set server version if not empty
+        QString serverVersion = caps["core"].toObject()["status"].toObject()["version"].toString();
+        if (!serverVersion.isEmpty()) {
+            account->setServerVersion(serverVersion);
+        }
         loop.quit();
     });
     job->start();
@@ -501,10 +531,11 @@ restart_sync:
         selectiveSyncFixup(&db, selectiveSyncList);
     }
 
-    SyncOptions opt;
-    opt.fillFromEnvironmentVariables();
-    opt.verifyChunkSizes();
-    SyncEngine engine(account, options.source_dir, opt, folder, &db);
+    SyncOptions syncOptions;
+    syncOptions.fillFromEnvironmentVariables();
+    syncOptions.verifyChunkSizes();
+    syncOptions.setIsCmd(true);
+    SyncEngine engine(account, options.source_dir, syncOptions, folder, &db);
     engine.setIgnoreHiddenFiles(options.ignoreHiddenFiles);
     engine.setNetworkLimits(options.uplimit, options.downlimit);
     QObject::connect(&engine, &SyncEngine::finished,

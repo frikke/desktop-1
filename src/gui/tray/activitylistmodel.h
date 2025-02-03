@@ -21,6 +21,10 @@
 
 class QJsonDocument;
 
+namespace ActivityListModelTestUtils {
+class TestingALM;
+}
+
 namespace OCC {
 
 Q_DECLARE_LOGGING_CATEGORY(lcActivity)
@@ -47,8 +51,7 @@ class ActivityListModel : public QAbstractListModel
 
 public:
     enum DataRole {
-        DarkIconRole = Qt::UserRole + 1,
-        LightIconRole,
+        IconRole = Qt::UserRole + 1,
         AccountRole,
         ObjectTypeRole,
         ObjectIdRole,
@@ -89,9 +92,7 @@ public:
     Q_ENUM(ErrorType)
 
     explicit ActivityListModel(QObject *parent = nullptr);
-
-    explicit ActivityListModel(AccountState *accountState,
-        QObject *parent = nullptr);
+    explicit ActivityListModel(AccountState *accountState, QObject *parent = nullptr);
 
     [[nodiscard]] QVariant data(const QModelIndex &index, int role) const override;
     [[nodiscard]] int rowCount(const QModelIndex &parent = QModelIndex()) const override;
@@ -99,7 +100,6 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     [[nodiscard]] bool canFetchMore(const QModelIndex &) const override;
-    void fetchMore(const QModelIndex &) override;
 
     ActivityList activityList() { return _finalList; }
     ActivityList errorsList() { return _notificationErrorsLists; }
@@ -120,6 +120,8 @@ public:
     [[nodiscard]] OCC::ActivityList allConflicts() const;
 
 public slots:
+    void fetchMore(const QModelIndex &) override;
+
     void slotRefreshActivity();
     void slotRefreshActivityInitial();
     void slotRemoveAccount();
@@ -128,11 +130,13 @@ public slots:
     void slotTriggerDismiss(const int activityIndex);
 
     void addNotificationToActivityList(const OCC::Activity &activity);
-    void addErrorToActivityList(const OCC::Activity &activity, const ErrorType type);
+    void addErrorToActivityList(const OCC::Activity &activity, const OCC::ActivityListModel::ErrorType type);
     void addIgnoredFileToList(const OCC::Activity &newActivity);
     void addSyncFileItemToActivityList(const OCC::Activity &activity);
     void removeActivityFromActivityList(int row);
     void removeActivityFromActivityList(const OCC::Activity &activity);
+
+    void checkAndRemoveSeenActivities(const OCC::ActivityList &newActivities);
 
     void setAccountState(OCC::AccountState *state);
     void setReplyMessageSent(const int activityIndex, const QString &message);
@@ -146,10 +150,10 @@ signals:
     void activityJobStatusCode(int statusCode);
     void sendNotificationRequest(const QString &accountName, const QString &link, const QByteArray &verb, int row);
 
+    void interactiveActivityReceived();
+
 protected:
     [[nodiscard]] bool currentlyFetching() const;
-
-    [[nodiscard]] const ActivityList &finalList() const; // added for unit tests
 
 protected slots:
     void activitiesReceived(const QJsonDocument &json, int statusCode);
@@ -157,12 +161,16 @@ protected slots:
     void setDoneFetching(bool value);
     void setHideOldActivities(bool value);
     void setDisplayActions(bool value);
-    void setFinalList(const OCC::ActivityList &finalList); // added for unit tests
 
     virtual void startFetchJob();
 
 private slots:
     void addEntriesToActivityList(const OCC::ActivityList &activityList);
+    void accountStateHasChanged();
+    void ingestActivities(const QJsonArray &activities);
+    void appendMoreActivitiesAvailableEntry();
+    void insertOrRemoveDummyFetchingActivity();
+    void triggerCaseClashAction(OCC::Activity activity);
 
 private:
     static QVariantList convertLinksToMenuEntries(const Activity &activity);
@@ -170,11 +178,6 @@ private:
     static QVariant convertLinkToActionButton(const ActivityLink &activityLink);
 
     [[nodiscard]] bool canFetchActivities() const;
-
-    void ingestActivities(const QJsonArray &activities);
-    void appendMoreActivitiesAvailableEntry();
-    void insertOrRemoveDummyFetchingActivity();
-    void triggerCaseClashAction(Activity activity);
 
     void displaySingleConflictDialog(const Activity &activity);
     void setHasSyncConflicts(bool conflictsFound);
@@ -194,8 +197,8 @@ private:
     bool _displayActions = true;
 
     int _currentItem = 0;
-    int _maxActivities = 100;
-    int _maxActivitiesDays = 30;
+    static constexpr int _maxActivities = 100;
+    static constexpr int _maxActivitiesDays = 30;
     bool _showMoreActivitiesAvailableEntry = false;
 
     QPointer<ConflictDialog> _currentConflictDialog;
@@ -209,7 +212,13 @@ private:
 
     bool _hasSyncConflicts = false;
 
+    bool _accountStateWasConnected = false;
+
+    QElapsedTimer _durationSinceDisconnection;
+
     static constexpr quint32 MaxActionButtons = 3;
+
+    friend class ActivityListModelTestUtils::TestingALM;
 };
 }
 

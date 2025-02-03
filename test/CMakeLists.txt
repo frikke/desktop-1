@@ -4,6 +4,8 @@ include(nextcloud_add_test.cmake)
 
 set(CMAKE_AUTOMOC TRUE)
 
+find_package(Qt${QT_VERSION_MAJOR}Core5Compat ${REQUIRED_QT_VERSION} CONFIG QUIET)
+
 add_library(testutils
   STATIC
   syncenginetestutils.cpp
@@ -12,9 +14,10 @@ add_library(testutils
   testhelper.cpp
   sharetestutils.cpp
   endtoendtestutils.cpp
+  activitylistmodeltestutils.cpp
 )
 
-target_link_libraries(testutils PUBLIC Nextcloud::sync Qt5::Test)
+target_link_libraries(testutils PUBLIC Nextcloud::sync Qt::Test Qt::Core5Compat)
 target_include_directories(testutils PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 set_target_properties(testutils PROPERTIES FOLDER Tests)
 
@@ -34,10 +37,18 @@ nextcloud_add_test(XmlParse)
 nextcloud_add_test(ChecksumValidator)
 
 nextcloud_add_test(ClientSideEncryption)
-nextcloud_add_test(ExcludedFiles)
+nextcloud_add_test(ClientSideEncryptionV2)
+
+if (NOT APPLE)
+    nextcloud_add_test(ExcludedFiles)
+endif()
 
 nextcloud_add_test(Utility)
-nextcloud_add_test(SyncEngine)
+
+if (NOT APPLE)
+    nextcloud_add_test(SyncEngine)
+endif()
+
 nextcloud_add_test(SyncVirtualFiles)
 nextcloud_add_test(SyncMove)
 nextcloud_add_test(SyncDelete)
@@ -51,11 +62,19 @@ nextcloud_add_test(AllFilesDeleted)
 nextcloud_add_test(Blacklist)
 nextcloud_add_test(LocalDiscovery)
 nextcloud_add_test(RemoteDiscovery)
-nextcloud_add_test(Permissions)
+
+if (NOT APPLE)
+    nextcloud_add_test(Permissions)
+endif()
+
 nextcloud_add_test(SelectiveSync)
 nextcloud_add_test(DatabaseError)
 nextcloud_add_test(LockedFiles)
-nextcloud_add_test(FolderWatcher)
+
+if (NOT WIN32)
+    nextcloud_add_test(FolderWatcher)
+endif()
+
 nextcloud_add_test(Capabilities)
 nextcloud_add_test(PushNotifications)
 nextcloud_add_test(Theme)
@@ -63,6 +82,7 @@ nextcloud_add_test(IconUtils)
 nextcloud_add_test(SetUserStatusDialog)
 nextcloud_add_test(UnifiedSearchListmodel)
 nextcloud_add_test(ActivityListModel)
+nextcloud_add_test(SortedActivityListModel)
 nextcloud_add_test(ActivityData)
 nextcloud_add_test(TalkReply)
 nextcloud_add_test(LockFile)
@@ -72,6 +92,8 @@ nextcloud_add_test(SortedShareModel)
 nextcloud_add_test(SecureFileDrop)
 nextcloud_add_test(FileTagModel)
 nextcloud_add_test(SyncConflictsModel)
+nextcloud_add_test(DateFieldBackend)
+nextcloud_add_test(ClientStatusReporting)
 
 target_link_libraries(SecureFileDropTest PRIVATE Nextcloud::sync)
 configure_file(fake2eelocksucceeded.json "${PROJECT_BINARY_DIR}/bin/fake2eelocksucceeded.json" COPYONLY)
@@ -79,6 +101,7 @@ configure_file(fakefiledrope2eefoldermetadata.json "${PROJECT_BINARY_DIR}/bin/fa
 configure_file(e2etestsfakecert.pem "${PROJECT_BINARY_DIR}/bin/e2etestsfakecert.pem" COPYONLY)
 configure_file(e2etestsfakecertprivatekey.pem "${PROJECT_BINARY_DIR}/bin/e2etestsfakecertprivatekey.pem" COPYONLY)
 configure_file(e2etestsfakecertpublickey.pem "${PROJECT_BINARY_DIR}/bin/e2etestsfakecertpublickey.pem" COPYONLY)
+configure_file(fake2eelocksucceeded.json "${PROJECT_BINARY_DIR}/bin/fakeshortcut.base64" COPYONLY)
 
 
 if(ADD_E2E_TESTS)
@@ -111,8 +134,6 @@ nextcloud_add_benchmark(LargeSync)
 nextcloud_add_test(Account)
 nextcloud_add_test(FolderMan)
 nextcloud_add_test(RemoteWipe)
-
-nextcloud_add_test(OAuth)
 
 configure_file(test_journal.db "${PROJECT_BINARY_DIR}/bin/test_journal.db" COPYONLY)
 

@@ -21,10 +21,31 @@ using namespace OCC;
 
 SyncOptions::SyncOptions()
     : _vfs(new VfsOff)
+    , _isCmd(false)
 {
 }
 
 SyncOptions::~SyncOptions() = default;
+
+qint64 SyncOptions::minChunkSize() const
+{
+    return _minChunkSize;
+}
+
+void SyncOptions::setMinChunkSize(const qint64 minChunkSize)
+{
+    _minChunkSize = ::qBound(_minChunkSize, minChunkSize, _maxChunkSize);
+}
+
+qint64 SyncOptions::maxChunkSize() const
+{
+    return _maxChunkSize;
+}
+
+void SyncOptions::setMaxChunkSize(const qint64 maxChunkSize)
+{
+    _maxChunkSize = ::qBound(_minChunkSize, maxChunkSize, _maxChunkSize);
+}
 
 void SyncOptions::fillFromEnvironmentVariables()
 {
@@ -70,4 +91,14 @@ void SyncOptions::setPathPattern(const QString &pattern)
 {
     _fileRegex.setPatternOptions(Utility::fsCasePreserving() ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption);
     _fileRegex.setPattern(pattern);
+}
+
+void SyncOptions::setIsCmd(const bool isCmd)
+{
+    _isCmd = isCmd;
+}
+
+bool SyncOptions::isCmd() const
+{
+    return _isCmd;
 }

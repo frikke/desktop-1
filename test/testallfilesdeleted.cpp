@@ -32,6 +32,13 @@ class TestAllFilesDeleted : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        OCC::Logger::instance()->setLogFlush(true);
+        OCC::Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
 
     void testAllFilesDeletedKeep_data()
     {
@@ -181,7 +188,7 @@ private slots:
         QVERIFY(fakeFolder.syncOnce());
         QCOMPARE(aboutToRemoveAllFilesCalled, 0);
 
-        // Do some change localy
+        // Do some change locally
         fakeFolder.localModifier().appendByte("A/a1");
 
         // reset the server.
@@ -216,7 +223,7 @@ private slots:
 
         int fingerprintRequests = 0;
         fakeFolder.setServerOverride([&](QNetworkAccessManager::Operation, const QNetworkRequest &request, QIODevice *stream) -> QNetworkReply * {
-            auto verb = request.attribute(QNetworkRequest::CustomVerbAttribute);
+            auto verb = request.attribute(QNetworkRequest::CustomVerbAttribute).toString();
             if (verb == "PROPFIND") {
                 auto data = stream->readAll();
                 if (data.contains("data-fingerprint")) {
@@ -259,7 +266,7 @@ private slots:
         QVERIFY(fakeFolder.syncOnce());
         QCOMPARE(fingerprintRequests, 2);
         auto currentState = fakeFolder.currentLocalState();
-        // Altough the local file is kept as a conflict, the server file is downloaded
+        // Although the local file is kept as a conflict, the server file is downloaded
         QCOMPARE(currentState.find("A/a1")->contentChar, 'O');
         auto conflict = findConflict(currentState, "A/a1");
         QVERIFY(conflict);
@@ -325,7 +332,7 @@ private slots:
             QStringList() << "A/" << "B/" << "C/" << "S/");
 
         QVERIFY(fakeFolder.syncOnce());
-        QCOMPARE(fakeFolder.currentLocalState(), FileInfo{}); // all files should be one localy
+        QCOMPARE(fakeFolder.currentLocalState(), FileInfo{}); // all files should be one locally
         QCOMPARE(fakeFolder.currentRemoteState(), FileInfo::A12_B12_C12_S12()); // Server not changed
         QCOMPARE(aboutToRemoveAllFilesCalled, 0); // But we did not show the popup
     }

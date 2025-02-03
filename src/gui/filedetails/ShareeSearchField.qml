@@ -12,13 +12,13 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Window 2.15
-import QtQuick.Layouts 1.2
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Window
+import QtQuick.Layouts
+import QtQuick.Controls
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 import "../tray"
 
 TextField {
@@ -29,6 +29,7 @@ TextField {
     property var accountState: ({})
     property bool shareItemIsFolder: false
     property var shareeBlocklist: ({})
+    property bool isShareeFetchOngoing: shareeModel.fetchOngoing
     property ShareeModel shareeModel: ShareeModel {
         accountState: root.accountState
         shareItemIsFolder: root.shareItemIsFolder
@@ -37,16 +38,15 @@ TextField {
     }
 
     readonly property int horizontalPaddingOffset: Style.trayHorizontalMargin
-    readonly property color placeholderColor: palette.dark
     readonly property double iconsScaleFactor: 0.6
 
     function triggerSuggestionsVisibility() {
         shareeListView.count > 0 ? suggestionsPopup.open() : suggestionsPopup.close();
     }
 
-    placeholderText: qsTr("Search for users or groups…")
-    placeholderTextColor: placeholderColor
-    enabled: !shareeModel.fetchOngoing
+    placeholderText: enabled ? qsTr("Search for users or groups…") : qsTr("Sharing is not available for this folder")
+    verticalAlignment: Qt.AlignVCenter
+    implicitHeight: Math.max(Style.talkReplyTextFieldPreferredHeight, contentHeight)
 
     onActiveFocusChanged: triggerSuggestionsVisibility()
     onTextChanged: triggerSuggestionsVisibility()
@@ -90,13 +90,6 @@ TextField {
     leftPadding: searchIcon.width + searchIcon.anchors.leftMargin + horizontalPaddingOffset
     rightPadding: clearTextButton.width + clearTextButton.anchors.rightMargin + horizontalPaddingOffset
 
-    background: Rectangle {
-        radius: 5
-        border.color: parent.activeFocus ? UserModel.currentUser.accentColor : palette.dark
-        border.width: 1
-        color: palette.base
-    }
-
     Image {
         id: searchIcon
         anchors {
@@ -114,7 +107,7 @@ TextField {
         fillMode: Image.PreserveAspectFit
         horizontalAlignment: Image.AlignLeft
 
-        source: "image://svgimage-custom-color/search.svg" + "/" + root.placeholderColor
+        source: "image://svgimage-custom-color/search.svg" + "/" + palette.placeholderText
         sourceSize: Qt.size(parent.height * root.iconsScaleFactor, parent.height * root.iconsScaleFactor)
 
         visible: !root.shareeModel.fetchOngoing
@@ -130,7 +123,7 @@ TextField {
         }
 
         width: height
-        color: root.placeholderColor
+        color: palette.placeholderText
         visible: root.shareeModel.fetchOngoing
         running: visible
     }
@@ -152,7 +145,7 @@ TextField {
         mipmap: true
         fillMode: Image.PreserveAspectFit
 
-        source: "image://svgimage-custom-color/clear.svg" + "/" + root.placeholderColor
+        source: "image://svgimage-custom-color/clear.svg" + "/" + palette.placeholderText
         sourceSize: Qt.size(parent.height * root.iconsScaleFactor, parent.height * root.iconsScaleFactor)
 
         visible: root.text
@@ -185,8 +178,7 @@ TextField {
                 interactive: true
 
                 highlight: Rectangle {
-                    width: shareeListView.currentItem.width
-                    height: shareeListView.currentItem.height
+                    anchors.fill: shareeListView.currentItem
                     color: palette.highlight
                 }
                 highlightFollowsCurrentItem: true
@@ -200,8 +192,7 @@ TextField {
 
                 model: root.shareeModel
                 delegate: ShareeDelegate {
-                    anchors.left: parent.left
-                    anchors.right: parent.right
+                    width: shareeListView.contentItem.width
 
                     enabled: model.type !== Sharee.LookupServerSearchResults
                     hoverEnabled: model.type !== Sharee.LookupServerSearchResults

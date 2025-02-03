@@ -12,12 +12,12 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import QtQuick.Controls 2.15
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls
 
-import com.nextcloud.desktopclient 1.0
-import Style 1.0
+import com.nextcloud.desktopclient
+import Style
 import "../tray"
 
 Page {
@@ -38,6 +38,7 @@ Page {
     property StackView rootStackView: StackView {}
     property bool showCloseButton: false
     property bool backgroundsVisible: true
+    property color accentColor: Style.ncBlue
 
     property FileDetails fileDetails: FileDetails {
         id: fileDetails
@@ -47,13 +48,17 @@ Page {
     Connections {
         target: Systray
         function onShowFileDetailsPage(fileLocalPath, page) {
-            if(fileLocalPath === root.localPath) {
+            if (!root.fileDetails.sharingAvailable && page == Systray.FileDetailsPage.Sharing) {
+                return;
+            }
+
+            if (fileLocalPath === root.localPath) {
                 switch(page) {
                 case Systray.FileDetailsPage.Activity:
                     swipeView.currentIndex = fileActivityView.swipeIndex;
                     break;
                 case Systray.FileDetailsPage.Sharing:
-                    swipeView.currentIndex = shareView.swipeIndex;
+                    swipeView.currentIndex = shareViewLoader.swipeIndex;
                     break;
                 }
             }
@@ -64,7 +69,7 @@ Page {
     bottomPadding: intendedPadding
 
     background: Rectangle {
-        color: palette.window
+        color: palette.base
         visible: root.backgroundsVisible
     }
 
@@ -125,21 +130,19 @@ Page {
                 wrapMode: Text.Wrap
             }
 
-            CustomButton {
+            Button {
                 id: closeButton
 
                 Layout.rowSpan: headerGridLayout.rows
-                Layout.preferredWidth: Style.iconButtonWidth
-                Layout.preferredHeight: width
+                Layout.preferredWidth: Style.activityListButtonWidth
+                Layout.preferredHeight: Style.activityListButtonHeight
+                Layout.alignment: Qt.AlignHCenter | Qt.AlignVCenter
                 Layout.rightMargin: headerGridLayout.textRightMargin
 
                 icon.source: "image://svgimage-custom-color/clear.svg" + "/" + palette.buttonText
-                bgColor: palette.highlight
-                bgNormalOpacity: 0
-                toolTipText: qsTr("Dismiss")
-
+                icon.width: Style.activityListButtonIconSize
+                icon.height: Style.activityListButtonIconSize
                 visible: root.showCloseButton
-
                 onClicked: root.closeButtonClicked()
             }
 
@@ -150,7 +153,6 @@ Page {
                 Layout.rightMargin: headerGridLayout.textRightMargin
 
                 text: `${root.fileDetails.sizeString} · ${root.fileDetails.lastChangedString}`
-                color: palette.midlight
                 wrapMode: Text.Wrap
             }
 
@@ -161,7 +163,6 @@ Page {
                 Layout.rightMargin: headerGridLayout.textRightMargin
 
                 text: root.fileDetails.lockExpireString
-                color: palette.midlight
                 wrapMode: Text.Wrap
                 visible: headerGridLayout.showFileLockedString
             }
@@ -203,7 +204,7 @@ Page {
                         id: hoverHandler
                     }
 
-                    NCToolTip {
+                    ToolTip {
                         visible: hoverHandler.hovered
                         text: tagRepeater.fileTagModel.overflowTagsString
                     }
@@ -218,6 +219,7 @@ Page {
             Layout.rightMargin: root.intendedPadding
 
             padding: 0
+            background: null
 
             NCTabButton {
                 svgCustomColorSource: "image://svgimage-custom-color/activity.svg"
@@ -227,10 +229,13 @@ Page {
             }
 
             NCTabButton {
+                width: visible ? implicitWidth : 0
+                height: visible ? implicitHeight : 0
                 svgCustomColorSource: "image://svgimage-custom-color/share.svg"
                 text: qsTr("Sharing")
-                checked: swipeView.currentIndex === shareView.swipeIndex
-                onClicked: swipeView.currentIndex = shareView.swipeIndex
+                checked: swipeView.currentIndex === shareViewLoader.swipeIndex
+                onClicked: swipeView.currentIndex = shareViewLoader.swipeIndex
+                visible: root.fileDetails.sharingAvailable
             }
         }
     }
@@ -244,7 +249,7 @@ Page {
         FileActivityView {
             id: fileActivityView
 
-            property int swipeIndex: SwipeView.index
+            readonly property int swipeIndex: SwipeView.index
 
             delegateHorizontalPadding: root.intendedPadding
 
@@ -253,18 +258,29 @@ Page {
             iconSize: root.iconSize
         }
 
-        ShareView {
-            id: shareView
+        Loader {
+            id: shareViewLoader
 
-            property int swipeIndex: SwipeView.index
+            readonly property int swipeIndex: SwipeView.index
 
-            accountState: root.accountState
-            localPath: root.localPath
-            fileDetails: root.fileDetails
-            horizontalPadding: root.intendedPadding
-            iconSize: root.iconSize
-            rootStackView: root.rootStackView
-            backgroundsVisible: root.backgroundsVisible
+            width: swipeView.width
+            height: swipeView.height
+            active: root.fileDetails.sharingAvailable
+
+            sourceComponent: ShareView {
+                id: shareView
+
+                anchors.fill: parent
+
+                accountState: root.accountState
+                localPath: root.localPath
+                fileDetails: root.fileDetails
+                horizontalPadding: root.intendedPadding
+                iconSize: root.iconSize
+                rootStackView: root.rootStackView
+                backgroundsVisible: root.backgroundsVisible
+                accentColor: root.accentColor
+            }
         }
     }
 }

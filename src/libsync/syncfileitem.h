@@ -133,7 +133,7 @@ public:
 
     /** Creates a basic SyncFileItem from remote properties
      */
-    [[nodiscard]] static SyncFileItemPtr fromProperties(const QString &filePath, const QMap<QString, QString> &properties);
+    [[nodiscard]] static SyncFileItemPtr fromProperties(const QString &filePath, const QMap<QString, QString> &properties, RemotePermissions::MountedPermissionAlgorithm algorithm);
 
 
     SyncFileItem()
@@ -236,6 +236,8 @@ public:
 
     [[nodiscard]] bool isEncrypted() const { return _e2eEncryptionStatus != EncryptionStatus::NotEncrypted; }
 
+    void updateLockStateFromDbRecord(const SyncJournalFileRecord &dbRecord);
+
     // Variables useful for everybody
 
     /** The syncfolder-relative filesystem path that the operation is about
@@ -282,9 +284,13 @@ public:
     bool _isRestoration BITFIELD(1); // The original operation was forbidden, and this is a restoration
     bool _isSelectiveSync BITFIELD(1); // The file is removed or ignored because it is in the selective sync list
     EncryptionStatus _e2eEncryptionStatus = EncryptionStatus::NotEncrypted; // The file is E2EE or the content of the directory should be E2EE
+    EncryptionStatus _e2eEncryptionServerCapability = EncryptionStatus::NotEncrypted;
+    EncryptionStatus _e2eEncryptionStatusRemote = EncryptionStatus::NotEncrypted;
     quint16 _httpErrorCode = 0;
     RemotePermissions _remotePerm;
     QString _errorString; // Contains a string only in case of error
+    QString _errorExceptionName; // Contains a server exception string only in case of error
+    QString _errorExceptionMessage; // Contains a server exception message string only in case of error
     QByteArray _responseTimeStamp;
     QByteArray _requestId; // X-Request-Id of the failed request
     quint32 _affectedItems = 1; // the number of affected items by the operation on this item.
@@ -320,6 +326,7 @@ public:
     QString _lockEditorApp;
     qint64 _lockTime = 0;
     qint64 _lockTimeout = 0;
+    QString _lockToken;
 
     bool _isShared = false;
     time_t _lastShareStateFetchedTimestamp = 0;
@@ -329,6 +336,16 @@ public:
     bool _isFileDropDetected = false;
 
     bool _isEncryptedMetadataNeedUpdate = false;
+
+    bool _isAnyInvalidCharChild = false;
+    bool _isAnyCaseClashChild = false;
+
+    bool _isLivePhoto = false;
+    QString _livePhotoFile;
+
+    bool isPermissionsInvalid = false;
+
+    QString _discoveryResult;
 };
 
 inline bool operator<(const SyncFileItemPtr &item1, const SyncFileItemPtr &item2)

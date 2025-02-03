@@ -67,7 +67,7 @@ class OWNCLOUDSYNC_EXPORT Theme : public QObject
 
     Q_PROPERTY(QColor defaultColor READ defaultColor CONSTANT)
 
-    Q_PROPERTY(QPalette systemPalette READ systemPalette NOTIFY systemPaletteChanged)
+    Q_PROPERTY(QVariantMap systemPalette READ systemPalette NOTIFY systemPaletteChanged)
     Q_PROPERTY(bool darkMode READ darkMode NOTIFY darkModeChanged)
 public:
     enum CustomMediaType {
@@ -196,6 +196,7 @@ public:
 
     [[nodiscard]] QString statusHeaderText(SyncResult::Status) const;
     [[nodiscard]] QString version() const;
+    [[nodiscard]] QString versionSuffix() const;
 
     /**
      * Characteristics: bool if more than one sync folder is allowed
@@ -232,10 +233,17 @@ public:
 
     /**
      * Setting a value here will pre-define the server url.
+     * Can be a url OR a JSON array of servers description objects: {"name": "x", "url": "y"}
      *
      * The respective UI controls will be disabled only if forceOverrideServerUrl() is true
      */
     [[nodiscard]] QString overrideServerUrl() const;
+
+    /**
+     * Indicates whether the override server URL is in fact a JSON array of server description
+     * objects.
+     */
+    [[nodiscard]] bool multipleOverrideServers() const;
 
     /**
      * Enforce a pre-defined server url.
@@ -278,9 +286,9 @@ public:
     [[nodiscard]] bool doNotUseProxy() const;
 
     /**
-     * This is only usefull when previous version had a different overrideServerUrl
+     * This is only useful when previous version had a different overrideServerUrl
      * with a different auth type in that case You should then specify "http" or "shibboleth".
-     * Normaly this should be left empty.
+     * Normally this should be left empty.
      */
     [[nodiscard]] QString forceConfigAuthType() const;
 
@@ -337,6 +345,11 @@ public:
     [[nodiscard]] QString gitSHA1() const;
 
     /**
+     * About info text
+     */
+    [[nodiscard]] QString aboutInfo() const;
+
+    /**
      * About dialog contents
      */
     [[nodiscard]] QString about() const;
@@ -352,7 +365,7 @@ public:
     void setSystrayUseMonoIcons(bool mono);
 
     /**
-     * Retrieve wether to use mono icons for systray
+     * Retrieve whether to use mono icons for systray
      */
     [[nodiscard]] bool systrayUseMonoIcons() const;
 
@@ -458,20 +471,13 @@ public:
     /**
      * @brief the server folder that should be queried for the quota information
      *
-     * This can be configured to show the quota infromation for a different
+     * This can be configured to show the quota information for a different
      * folder than the root. This is the folder on which the client will do
      * PROPFIND calls to get "quota-available-bytes" and "quota-used-bytes"
      *
      * Defaults: "/"
      */
     [[nodiscard]] QString quotaBaseFolder() const;
-
-    /**
-     * The OAuth client_id, secret pair.
-     * Note that client that change these value cannot connect to un-branded owncloud servers.
-     */
-    [[nodiscard]] QString oauthClientId() const;
-    [[nodiscard]] QString oauthClientSecret() const;
 
     /**
      * @brief What should be output for the --version command line switch.
@@ -595,14 +601,22 @@ public:
 
     static constexpr const char *themePrefix = ":/client/theme/";
 
-    QPalette systemPalette();
-    bool darkMode();
+    [[nodiscard]] QVariantMap systemPalette() const;
+    [[nodiscard]] bool darkMode() const;
+
+    /**
+     * Display legacy import dialog
+     *
+     * The user will interact with the dialog to import legacy account when set to true
+     */
+    [[nodiscard]] bool displayLegacyImportDialog() const;
 
 public slots:
     void setOverrideServerUrl(const QString &overrideServerUrl);
     void setForceOverrideServerUrl(bool forceOverride);
     void setVfsEnabled(bool enabled);
     void setStartLoginFlowAutomatically(bool startLoginFlowAuto);
+    void systemPaletteHasChanged();
 
 protected:
 #ifndef TOKEN_AUTH_ONLY
@@ -631,17 +645,18 @@ private:
     Theme(Theme const &);
     Theme &operator=(Theme const &);
 
-    void connectToPaletteSignal();
+    void updateMultipleOverrideServers();
+    void connectToPaletteSignal() const;
 #if defined(Q_OS_WIN)
     QPalette reserveDarkPalette; // Windows 11 button and window dark colours
 #endif
 
     static Theme *_instance;
     bool _mono = false;
-    bool _paletteSignalsConnected = false;
 
     QString _overrideServerUrl;
     bool _forceOverrideServerUrl = false;
+    bool _multipleOverrideServers = false;
     bool _isVfsEnabled = false;
     bool _startLoginFlowAutomatically = false;
 

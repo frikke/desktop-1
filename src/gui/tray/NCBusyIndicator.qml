@@ -12,14 +12,14 @@
  * for more details.
  */
 
-import QtQuick 2.15
-import QtQuick.Controls 2.15
-import Style 1.0
+import QtQuick
+import QtQuick.Controls
+import Style
 
 BusyIndicator {
     id: root
 
-    property color color: palette.midlight
+    property color color: palette.dark
     property string imageSource: "image://svgimage-custom-color/change.svg/"
 
     property int imageSourceSizeWidth: 64

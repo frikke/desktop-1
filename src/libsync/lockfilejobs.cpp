@@ -28,27 +28,51 @@ Q_LOGGING_CATEGORY(lcLockFileJob, "nextcloud.sync.networkjob.lockfile", QtInfoMs
 LockFileJob::LockFileJob(const AccountPtr account,
                          SyncJournalDb* const journal,
                          const QString &path,
+                         const QString &remoteSyncPathWithTrailingSlash,
+                         const QString &localSyncPath,
+                         const QString &etag,
                          const SyncFileItem::LockStatus requestedLockState,
+                         const SyncFileItem::LockOwnerType lockOwnerType,
                          QObject *parent)
     : AbstractNetworkJob(account, path, parent)
     , _journal(journal)
     , _requestedLockState(requestedLockState)
+    , _requestedLockOwnerType(lockOwnerType)
+    , _remoteSyncPathWithTrailingSlash(remoteSyncPathWithTrailingSlash)
+    , _localSyncPath(localSyncPath)
+    , _existingEtag(etag)
 {
+    if (!_localSyncPath.endsWith(QLatin1Char('/'))) {
+        _localSyncPath.append(QLatin1Char('/'));
+    }
 }
 
 void LockFileJob::start()
 {
-    qCInfo(lcLockFileJob()) << "start" << path() << _requestedLockState;
+    qCInfo(lcLockFileJob()) << "start with path:" << path()
+                            << "lock state:" <<  _requestedLockState
+                            << "lock owner type:" << _requestedLockOwnerType;
 
     QNetworkRequest request;
-    request.setRawHeader("X-User-Lock", "1");
+    request.setRawHeader(QByteArrayLiteral("X-User-Lock"), QByteArrayLiteral("1"));
+    if (_account->capabilities().filesLockTypeAvailable()) {
+        if (_requestedLockOwnerType == SyncFileItem::LockOwnerType::UserLock) {
+            request.setRawHeader(QByteArrayLiteral("X-User-Lock-Type"), ("0"));
+        } else if (_requestedLockOwnerType == SyncFileItem::LockOwnerType::TokenLock) {
+            request.setRawHeader(QByteArrayLiteral("X-User-Lock-Type"), ("2"));
+        }
+    }
 
     QByteArray verb;
     switch(_requestedLockState)
     {
     case SyncFileItem::LockStatus::LockedItem:
+    {
+        const auto etagValue = QLatin1String("\"%1\"").arg(_existingEtag.toLatin1());
+        request.setRawHeader(QByteArrayLiteral("If-Match"), etagValue.toLatin1());
         verb = "LOCK";
         break;
+    }
     case SyncFileItem::LockStatus::UnlockedItem:
         verb = "UNLOCK";
         break;
@@ -61,7 +85,7 @@ void LockFileJob::start()
 bool LockFileJob::finished()
 {
     if (reply()->error() != QNetworkReply::NoError) {
-        qCInfo(lcLockFileJob()) << "finished with error" << reply()->error() << reply()->errorString();
+        qCInfo(lcLockFileJob()) << "finished with error" << reply()->error() << reply()->errorString() << _requestedLockState << _requestedLockOwnerType << _existingEtag;
         const auto httpErrorCode = reply()->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (httpErrorCode == LOCKED_HTTP_ERROR_CODE) {
             const auto record = handleReply();
@@ -81,7 +105,7 @@ bool LockFileJob::finished()
             Q_EMIT finishedWithError(httpErrorCode, reply()->errorString(), {});
         }
     } else {
-        qCInfo(lcLockFileJob()) << "success" << path();
+        qCInfo(lcLockFileJob()) << "success" << path() << _requestedLockState << _requestedLockOwnerType;
         handleReply();
         Q_EMIT finishedWithoutError();
     }
@@ -97,6 +121,10 @@ void LockFileJob::setFileRecordLocked(SyncJournalFileRecord &record) const
     record._lockstate._lockEditorApp = _editorName;
     record._lockstate._lockTime = _lockTime;
     record._lockstate._lockTimeout = _lockTimeout;
+    record._lockstate._lockToken = _lockToken;
+    if (!_etag.isEmpty()) {
+        record._etag = _etag;
+    }
 }
 
 void LockFileJob::resetState()
@@ -108,6 +136,7 @@ void LockFileJob::resetState()
     _userId.clear();
     _lockTime = 0;
     _lockTimeout = 0;
+    _lockToken.clear();
 }
 
 SyncJournalFileRecord LockFileJob::handleReply()
@@ -158,18 +187,14 @@ SyncJournalFileRecord LockFileJob::handleReply()
         if (_lockTime <= 0) {
             return record;
         }
-
-        if (_lockTimeout <= 0) {
-            return record;
-        }
     }
 
-    const auto relativePath = path().mid(1);
-    if (_journal->getFileRecord(relativePath, &record) && record.isValid()) {
+    const auto relativePathInDb = path().mid(_remoteSyncPathWithTrailingSlash.size());
+    if (_journal->getFileRecord(relativePathInDb, &record) && record.isValid()) {
         setFileRecordLocked(record);
-        if (_lockOwnerType != SyncFileItem::LockOwnerType::UserLock ||
-                _userId != account()->davUser()) {
-            FileSystem::setFileReadOnly(relativePath, true);
+        if ((_lockStatus == SyncFileItem::LockStatus::LockedItem)
+            && (_lockOwnerType == SyncFileItem::LockOwnerType::AppLock || _userId != account()->davUser())) {
+            FileSystem::setFileReadOnly(_localSyncPath + relativePathInDb, true);
         }
         const auto result = _journal->setFileRecord(record);
         if (!result) {
@@ -199,6 +224,8 @@ void LockFileJob::decodeStartElement(const QString &name,
         const auto convertedValue = valueText.toInt(&isValid);
         if (isValid) {
             _lockOwnerType = static_cast<SyncFileItem::LockOwnerType>(convertedValue);
+        } else {
+            _lockOwnerType = SyncFileItem::LockOwnerType::UserLock;
         }
     } else if (name == QStringLiteral("lock-owner-displayname")) {
         _userDisplayName = reader.readElementText();
@@ -220,6 +247,10 @@ void LockFileJob::decodeStartElement(const QString &name,
         }
     } else if (name == QStringLiteral("lock-owner-editor")) {
         _editorName = reader.readElementText();
+    } else if (name == QStringLiteral("getetag")) {
+        _etag = reader.readElementText().toUtf8();
+    } else if (name == QStringLiteral("lock-token")) {
+        _lockToken = reader.readElementText();
     }
 }
 

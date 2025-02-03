@@ -112,6 +112,9 @@ bool PollJob::finished()
         _item->_requestId = requestId();
         _item->_status = classifyError(err, _item->_httpErrorCode);
         _item->_errorString = errorString();
+        const auto exceptionParsed = getExceptionFromReply(reply());
+        _item->_errorExceptionName = exceptionParsed.first;
+        _item->_errorExceptionMessage = exceptionParsed.second;
 
         if (_item->_status == SyncFileItem::FatalError || _item->_httpErrorCode >= 400) {
             if (_item->_status != SyncFileItem::FatalError
@@ -152,6 +155,13 @@ bool PollJob::finished()
     if (status == QLatin1String("finished")) {
         _item->_status = SyncFileItem::Success;
         _item->_fileId = json["fileId"].toString().toUtf8();
+
+        if (SyncJournalFileRecord oldRecord; _journal->getFileRecord(_item->destination(), &oldRecord) && oldRecord.isValid()) {
+            if (oldRecord._etag != _item->_etag) {
+                _item->updateLockStateFromDbRecord(oldRecord);
+            }
+        }
+
         _item->_etag = parseEtag(json["ETag"].toString().toUtf8());
     } else { // error
         _item->_status = classifyError(QNetworkReply::UnknownContentError, _item->_httpErrorCode);
@@ -368,7 +378,7 @@ void PropagateUploadFileCommon::slotComputeTransmissionChecksum(const QByteArray
 
 void PropagateUploadFileCommon::slotStartUpload(const QByteArray &transmissionChecksumType, const QByteArray &transmissionChecksum)
 {
-    // Remove ourselfs from the list of active job, before any posible call to done()
+    // Remove ourselves from the list of active job, before any possible call to done()
     // When we start chunks, we will add it again, once for every chunks.
     propagator()->_activeJobList.removeOne(this);
 
@@ -428,8 +438,8 @@ void PropagateUploadFileCommon::slotStartUpload(const QByteArray &transmissionCh
 
 void PropagateUploadFileCommon::slotFolderUnlocked(const QByteArray &folderId, int httpReturnCode)
 {
-    qDebug() << "Failed to unlock encrypted folder" << folderId;
     if (_uploadStatus.status == SyncFileItem::NoStatus && httpReturnCode != 200) {
+        qDebug() << "Failed to unlock encrypted folder" << folderId;
         done(SyncFileItem::FatalError, tr("Failed to unlock encrypted folder."));
     } else {
         done(_uploadStatus.status, _uploadStatus.message);
@@ -522,7 +532,10 @@ qint64 UploadDevice::readData(char *data, qint64 maxlen)
     }
 
     auto c = _file.read(data, maxlen);
-    if (c < 0) {
+    if (c == 0) {
+        setErrorString({});
+        return c;
+    } else if (c < 0) {
         setErrorString(_file.errorString());
         return -1;
     }
@@ -629,7 +642,7 @@ void PropagateUploadFileCommon::slotPollFinished()
     finalize();
 }
 
-void PropagateUploadFileCommon::done(SyncFileItem::Status status, const QString &errorString, const ErrorCategory category)
+void PropagateUploadFileCommon::done(const SyncFileItem::Status status, const QString &errorString, const ErrorCategory category)
 {
     _finished = true;
     PropagateItemJob::done(status, errorString, category);
@@ -709,13 +722,14 @@ void PropagateUploadFileCommon::commonErrorHandling(AbstractNetworkJob *job)
 void PropagateUploadFileCommon::adjustLastJobTimeout(AbstractNetworkJob *job, qint64 fileSize)
 {
     constexpr double threeMinutes = 3.0 * 60 * 1000;
+    constexpr qint64 thirtyMinutes = 30 * 60 * 1000;
 
     job->setTimeout(qBound(
-        job->timeoutMsec(),
         // Calculate 3 minutes for each gigabyte of data
-        qRound64(threeMinutes * fileSize / 1e9),
+        qMin(thirtyMinutes - 1, qRound64(threeMinutes * fileSize / 1e9)),
+        job->timeoutMsec(),
         // Maximum of 30 minutes
-        static_cast<qint64>(30 * 60 * 1000)));
+        thirtyMinutes));
 }
 
 void PropagateUploadFileCommon::slotJobDestroyed(QObject *job)
@@ -723,7 +737,7 @@ void PropagateUploadFileCommon::slotJobDestroyed(QObject *job)
     _jobs.erase(std::remove(_jobs.begin(), _jobs.end(), job), _jobs.end());
 }
 
-// This function is used whenever there is an error occuring and jobs might be in progress
+// This function is used whenever there is an error occurring and jobs might be in progress
 void PropagateUploadFileCommon::abortWithError(SyncFileItem::Status status, const QString &error)
 {
     if (_aborting)
@@ -793,7 +807,7 @@ void PropagateUploadFileCommon::finalize()
         quotaIt.value() -= _fileToUpload._size;
 
     // Update the database entry
-    const auto result = propagator()->updateMetadata(*_item);
+    const auto result = propagator()->updateMetadata(*_item, Vfs::DatabaseMetadata);
     if (!result) {
         done(SyncFileItem::FatalError, tr("Error updating metadata: %1").arg(result.error()));
         return;
@@ -864,7 +878,7 @@ void PropagateUploadFileCommon::abortNetworkJobs(
 
         // Abort the job
         if (abortType == AbortType::Asynchronous) {
-            // Connect to finished signal of job reply to asynchonously finish the abort
+            // Connect to finished signal of job reply to asynchronously finish the abort
             connect(reply, &QNetworkReply::finished, this, oneAbortFinished);
         }
         reply->abort();

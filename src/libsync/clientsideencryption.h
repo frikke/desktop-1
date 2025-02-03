@@ -1,6 +1,11 @@
 #ifndef CLIENTSIDEENCRYPTION_H
 #define CLIENTSIDEENCRYPTION_H
 
+#include "owncloudlib.h"
+
+#include "clientsideencryptionprimitives.h"
+#include "accountfwd.h"
+
 #include <QString>
 #include <QObject>
 #include <QJsonDocument>
@@ -10,11 +15,9 @@
 #include <QFile>
 #include <QVector>
 #include <QMap>
+#include <QHash>
 
 #include <openssl/evp.h>
-
-#include "accountfwd.h"
-#include "networkjobs.h"
 
 namespace QKeychain {
 class Job;
@@ -24,10 +27,10 @@ class ReadPasswordJob;
 
 namespace OCC {
 
-QString e2eeBaseUrl();
+QString e2eeBaseUrl(const OCC::AccountPtr &account);
 
 namespace EncryptionHelper {
-    QByteArray generateRandomFilename();
+    OWNCLOUDSYNC_EXPORT QByteArray generateRandomFilename();
     OWNCLOUDSYNC_EXPORT QByteArray generateRandom(int size);
     QByteArray generatePassword(const QString &wordlist, const QByteArray& salt);
     OWNCLOUDSYNC_EXPORT QByteArray encryptPrivateKey(
@@ -68,6 +71,12 @@ namespace EncryptionHelper {
 
     OWNCLOUDSYNC_EXPORT bool fileDecryption(const QByteArray &key, const QByteArray &iv,
                                QFile *input, QFile *output);
+
+    OWNCLOUDSYNC_EXPORT bool dataEncryption(const QByteArray &key, const QByteArray &iv, const QByteArray &input, QByteArray &output, QByteArray &returnTag);
+    OWNCLOUDSYNC_EXPORT bool dataDecryption(const QByteArray &key, const QByteArray &iv, const QByteArray &input, QByteArray &output);
+
+    OWNCLOUDSYNC_EXPORT QByteArray gzipThenEncryptData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv, QByteArray &returnTag);
+    OWNCLOUDSYNC_EXPORT QByteArray decryptThenUnGzipData(const QByteArray &key, const QByteArray &inputData, const QByteArray &iv);
 
 //
 // Simple classes for safe (RAII) handling of OpenSSL
@@ -116,11 +125,30 @@ private:
 };
 }
 
+class OWNCLOUDSYNC_EXPORT NextcloudSslCertificate
+{
+public:
+    NextcloudSslCertificate();
+    NextcloudSslCertificate(const NextcloudSslCertificate &other);
+    NextcloudSslCertificate(const QSslCertificate &certificate);
+    NextcloudSslCertificate(QSslCertificate &&certificate);
+
+    operator QSslCertificate();
+    operator QSslCertificate() const;
+
+    QSslCertificate& get();
+    const QSslCertificate &get() const;
+
+    NextcloudSslCertificate &operator=(const NextcloudSslCertificate &other);
+    NextcloudSslCertificate &operator=(NextcloudSslCertificate &&other);
+
+private:
+    QSslCertificate _certificate;
+};
+
 class OWNCLOUDSYNC_EXPORT ClientSideEncryption : public QObject {
     Q_OBJECT
 public:
-    class PKey;
-
     ClientSideEncryption();
 
     QByteArray _privateKey;
@@ -135,22 +163,36 @@ signals:
     void privateKeyDeleted();
     void certificateDeleted();
     void mnemonicDeleted();
+    void publicKeyDeleted();
+    void certificateFetchedFromKeychain(QSslCertificate certificate);
+    void certificatesFetchedFromServer(const QHash<QString, OCC::NextcloudSslCertificate> &results);
+    void certificateWriteComplete(const QSslCertificate &certificate);
+
+public:
+    [[nodiscard]] QByteArray generateSignatureCryptographicMessageSyntax(const QByteArray &data) const;
+    [[nodiscard]] bool verifySignatureCryptographicMessageSyntax(const QByteArray &cmsContent, const QByteArray &data, const QVector<QByteArray> &certificatePems) const;
 
 public slots:
     void initialize(const OCC::AccountPtr &account);
     void forgetSensitiveData(const OCC::AccountPtr &account);
+    void getUsersPublicKeyFromServer(const OCC::AccountPtr &account, const QStringList &userIds);
+    void fetchCertificateFromKeyChain(const OCC::AccountPtr &account, const QString &userId);
+    void writeCertificate(const OCC::AccountPtr &account, const QString &userId, const QSslCertificate &certificate);
 
 private slots:
     void generateKeyPair(const OCC::AccountPtr &account);
     void encryptPrivateKey(const OCC::AccountPtr &account);
 
+    void publicCertificateFetched(QKeychain::Job *incoming);
     void publicKeyFetched(QKeychain::Job *incoming);
+    void publicKeyFetchedForUserId(QKeychain::Job *incoming);
     void privateKeyFetched(QKeychain::Job *incoming);
     void mnemonicKeyFetched(QKeychain::Job *incoming);
 
     void handlePrivateKeyDeleted(const QKeychain::Job* const incoming);
     void handleCertificateDeleted(const QKeychain::Job* const incoming);
     void handleMnemonicDeleted(const QKeychain::Job* const incoming);
+    void handlePublicKeyDeleted(const QKeychain::Job* const incoming);
     void checkAllSensitiveDataDeleted();
 
     void getPrivateKeyFromServer(const OCC::AccountPtr &account);
@@ -158,94 +200,55 @@ private slots:
     void fetchAndValidatePublicKeyFromServer(const OCC::AccountPtr &account);
     void decryptPrivateKey(const OCC::AccountPtr &account, const QByteArray &key);
 
-    void fetchFromKeyChain(const OCC::AccountPtr &account);
+    void fetchCertificateFromKeyChain(const OCC::AccountPtr &account);
+    void fetchPublicKeyFromKeyChain(const OCC::AccountPtr &account);
     void writePrivateKey(const OCC::AccountPtr &account);
     void writeCertificate(const OCC::AccountPtr &account);
-    void writeMnemonic(const OCC::AccountPtr &account);
 
 private:
-    void generateCSR(const AccountPtr &account, PKey keyPair);
-    void sendSignRequestCSR(const AccountPtr &account, PKey keyPair, const QByteArray &csrContent);
+    void generateMnemonic();
+
+    [[nodiscard]] std::pair<QByteArray, PKey> generateCSR(const AccountPtr &account,
+                                                          PKey keyPair,
+                                                          PKey privateKey);
+
+    void sendSignRequestCSR(const AccountPtr &account,
+                            PKey keyPair,
+                            const QByteArray &csrContent);
+
+    void writeKeyPair(const AccountPtr &account,
+                      PKey keyPair,
+                      const QByteArray &csrContent);
+
+    template <typename L>
+    void writeMnemonic(OCC::AccountPtr account,
+                       L nextCall);
+
+    void checkServerHasSavedKeys(const AccountPtr &account);
+
+    template <typename SUCCESS_CALLBACK, typename ERROR_CALLBACK>
+    void checkUserPublicKeyOnServer(const OCC::AccountPtr &account,
+                                    SUCCESS_CALLBACK nextCheck,
+                                    ERROR_CALLBACK onError);
+
+    template <typename SUCCESS_CALLBACK, typename ERROR_CALLBACK>
+    void checkUserPrivateKeyOnServer(const OCC::AccountPtr &account,
+                                     SUCCESS_CALLBACK nextCheck,
+                                     ERROR_CALLBACK onError);
+
+    template <typename SUCCESS_CALLBACK, typename ERROR_CALLBACK>
+    void checkUserKeyOnServer(const QString &keyType,
+                              const OCC::AccountPtr &account,
+                              SUCCESS_CALLBACK nextCheck,
+                              ERROR_CALLBACK onError);
 
     [[nodiscard]] bool checkPublicKeyValidity(const AccountPtr &account) const;
     [[nodiscard]] bool checkServerPublicKeyValidity(const QByteArray &serverPublicKeyString) const;
     [[nodiscard]] bool sensitiveDataRemaining() const;
 
+    void failedToInitialize(const AccountPtr &account);
+
     bool isInitialized = false;
 };
-
-/* Generates the Metadata for the folder */
-struct EncryptedFile {
-    QByteArray encryptionKey;
-    QByteArray mimetype;
-    QByteArray initializationVector;
-    QByteArray authenticationTag;
-    QString encryptedFilename;
-    QString originalFilename;
-};
-
-class OWNCLOUDSYNC_EXPORT FolderMetadata {
-public:
-    enum class RequiredMetadataVersion {
-        Version1,
-        Version1_2,
-    };
-
-    explicit FolderMetadata(AccountPtr account);
-
-    explicit FolderMetadata(AccountPtr account,
-                            RequiredMetadataVersion requiredMetadataVersion,
-                            const QByteArray& metadata,
-                            int statusCode = -1);
-
-    [[nodiscard]] QByteArray encryptedMetadata() const;
-    void addEncryptedFile(const EncryptedFile& f);
-    void removeEncryptedFile(const EncryptedFile& f);
-    void removeAllEncryptedFiles();
-    [[nodiscard]] QVector<EncryptedFile> files() const;
-    [[nodiscard]] bool isMetadataSetup() const;
-
-    [[nodiscard]] bool isFileDropPresent() const;
-
-    [[nodiscard]] bool encryptedMetadataNeedUpdate() const;
-
-    [[nodiscard]] bool moveFromFileDropToFiles();
-
-    [[nodiscard]] QJsonObject fileDrop() const;
-
-private:
-    /* Use std::string and std::vector internally on this class
-     * to ease the port to Nlohmann Json API
-     */
-    void setupEmptyMetadata();
-    void setupExistingMetadata(const QByteArray& metadata);
-
-    [[nodiscard]] QByteArray encryptData(const QByteArray &data) const;
-    [[nodiscard]] QByteArray decryptData(const QByteArray &data) const;
-    [[nodiscard]] QByteArray decryptDataUsingKey(const QByteArray &data,
-                                                 const QByteArray &key,
-                                                 const QByteArray &authenticationTag,
-                                                 const QByteArray &initializationVector) const;
-
-    [[nodiscard]] QByteArray encryptJsonObject(const QByteArray& obj, const QByteArray pass) const;
-    [[nodiscard]] QByteArray decryptJsonObject(const QByteArray& encryptedJsonBlob, const QByteArray& pass) const;
-
-    [[nodiscard]] bool checkMetadataKeyChecksum(const QByteArray &metadataKey, const QByteArray &metadataKeyChecksum) const;
-
-    [[nodiscard]] QByteArray computeMetadataKeyChecksum(const QByteArray &metadataKey) const;
-
-    QByteArray _metadataKey;
-
-    QVector<EncryptedFile> _files;
-    AccountPtr _account;
-    RequiredMetadataVersion _requiredMetadataVersion = RequiredMetadataVersion::Version1_2;
-    QVector<QPair<QString, QString>> _sharing;
-    QJsonObject _fileDrop;
-    // used by unit tests, must get assigned simultaneously with _fileDrop and not erased
-    QJsonObject _fileDropFromServer;
-    bool _isMetadataSetup = false;
-    bool _encryptedMetadataNeedUpdate = false;
-};
-
 } // namespace OCC
 #endif

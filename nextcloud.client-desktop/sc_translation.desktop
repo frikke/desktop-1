@@ -9,10 +9,11 @@ Icon=@APPLICATION_ICON_NAME@
 Keywords=@APPLICATION_NAME@;syncing;file;sharing;
 X-GNOME-Autostart-Delay=3
 MimeType=application/vnd.@APPLICATION_EXECUTABLE@;x-scheme-handler/@APPLICATION_URI_HANDLER_SCHEME@;
+SingleMainWindow=true
 Actions=Quit;
 
 # Translations
-
+@LIBCLOUDPROVIDERS_DESKTOP_IMPLEMENTS@
 
 [Desktop Action Quit]
 Exec=@APPLICATION_EXECUTABLE@ --quit
@@ -21,7 +22,7 @@ Icon=@APPLICATION_EXECUTABLE@
 
 
 # Translations
-Icon[sc]=@NÙMENE_ICONA_APLICATZIONE@
 Name[sc]=@NÙMENE_APLICATZIONE@ Iscrivania
 Comment[sc]=@NÙMENE_APLICATZIONE@ cliente de sincronizatzione iscrivania
 GenericName[sc]=Sincronizadore de cartellas
+Icon[sc]=@NÙMENE_ICONA_APLICATZIONE@

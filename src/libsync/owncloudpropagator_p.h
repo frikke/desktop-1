@@ -47,7 +47,6 @@ inline bool fileIsStillChanging(const OCC::SyncFileItem &item)
 }
 
 namespace OCC {
-
 inline QByteArray getEtagFromReply(QNetworkReply *reply)
 {
     QByteArray ocEtag = parseEtag(reply->rawHeader("OC-ETag"));
@@ -60,6 +59,52 @@ inline QByteArray getEtagFromReply(QNetworkReply *reply)
         qCDebug(lcPropagator) << "Quite peculiar, we have an etag != OC-Etag [no problem!]" << etag << ocEtag;
     }
     return ret;
+}
+
+inline QPair<QByteArray, QByteArray> getExceptionFromReply(QNetworkReply * const reply)
+{
+    Q_ASSERT(reply);
+    if (!reply) {
+        qDebug() << "Could not parse null reply";
+        return {};
+    }
+    const auto httpStatusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    // only for BadRequest and UnsupportedMediaType
+    if (httpStatusCode != 400 && httpStatusCode != 415) {
+        return {};
+    }
+
+    // we must not modify the buffer
+    const auto replyBody = reply->peek(reply->bytesAvailable());
+
+    // parse exception name
+    auto exceptionNameStartIndex = replyBody.indexOf(QByteArrayLiteral("<s:exception>"));
+    if (exceptionNameStartIndex == -1) {
+        qDebug() << "Could not parse exception. No <s:exception> tag.";
+        return {};
+    }
+    exceptionNameStartIndex += QByteArrayLiteral("<s:exception>").size();
+    const auto exceptionNameEndIndex = replyBody.indexOf('<', exceptionNameStartIndex);
+    if (exceptionNameEndIndex == -1) {
+        return {};
+    }
+    const auto exceptionName = replyBody.mid(exceptionNameStartIndex, exceptionNameEndIndex - exceptionNameStartIndex);
+
+    // parse exception message
+    auto exceptionMessageStartIndex = replyBody.indexOf(QByteArrayLiteral("<s:message>"), exceptionNameEndIndex);
+    if (exceptionMessageStartIndex == -1) {
+        qDebug() << "Could not parse exception. No <s:message> tag.";
+        return {exceptionName, {}};
+    }
+    exceptionMessageStartIndex += QByteArrayLiteral("<s:message>").size();
+    const auto exceptionMessageEndIndex = replyBody.indexOf('<', exceptionMessageStartIndex);
+    if (exceptionMessageEndIndex == -1) {
+        return {exceptionName, {}};
+    }
+
+    const auto exceptionMessage = replyBody.mid(exceptionMessageStartIndex, exceptionMessageEndIndex - exceptionMessageStartIndex);
+
+    return {exceptionName, exceptionMessage};
 }
 
 /**
@@ -82,7 +127,7 @@ inline SyncFileItem::Status classifyError(QNetworkReply::NetworkError nerror,
     }
 
     if (httpCode == 503) {
-        // When the server is in maintenance mode, we want to exit the sync immediatly
+        // When the server is in maintenance mode, we want to exit the sync immediately
         // so that we do not flood the server with many requests
         // BUG: This relies on a translated string and is thus unreliable.
         //      In the future it should return a NormalError and trigger a status.php

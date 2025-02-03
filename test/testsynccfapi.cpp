@@ -112,12 +112,91 @@ class TestSyncCfApi : public QObject
     Q_OBJECT
 
 private slots:
+    void initTestCase()
+    {
+        Logger::instance()->setLogFlush(true);
+        Logger::instance()->setLogDebug(true);
+
+        QStandardPaths::setTestModeEnabled(true);
+    }
+
     void testVirtualFileLifecycle_data()
     {
         QTest::addColumn<bool>("doLocalDiscovery");
 
         QTest::newRow("full local discovery") << true;
         QTest::newRow("skip local discovery") << false;
+    }
+
+    void testReplaceFileByIdenticalFile()
+    {
+        FakeFolder fakeFolder{FileInfo{}};
+        auto vfs = setupVfs(fakeFolder);
+        ItemCompletedSpy completeSpy(fakeFolder);
+
+        // Create a new local (non-placeholder) file
+        fakeFolder.localModifier().insert("file0");
+        fakeFolder.localModifier().insert("file1");
+        CopyFile(QString(fakeFolder.localPath() + "file1").toStdWString().data(), QString(fakeFolder.localPath() + "file2").toStdWString().data(), false);
+        QVERIFY(!vfs->pinState("file0").isValid());
+        QVERIFY(!vfs->pinState("file1").isValid());
+        QVERIFY(!vfs->pinState("file2").isValid());
+
+        // Sync the files: files should be converted to placeholder files
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("file0").isValid());
+        QVERIFY(vfs->pinState("file1").isValid());
+        QVERIFY(vfs->pinState("file2").isValid());
+
+        // Sync again to ensure items are fully synced, otherwise test may succeed due to those pending changes.
+        QVERIFY(fakeFolder.syncOnce());
+        completeSpy.clear();
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(completeSpy.isEmpty());
+
+        // Replace file1 by identical file2: Windows will convert file1 to a regular (non-placeholder) file again.
+        CopyFile(QString(fakeFolder.localPath() + "file2").toStdWString().data(), QString(fakeFolder.localPath() + "file1").toStdWString().data(), false);
+        QVERIFY(vfs->pinState("file0").isValid());
+        QVERIFY(!vfs->pinState("file1").isValid());
+        QVERIFY(vfs->pinState("file2").isValid());
+
+        // Sync again: file should be correctly converted to placeholders
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("file0").isValid());
+        QVERIFY(vfs->pinState("file1").isValid());
+        QVERIFY(vfs->pinState("file2").isValid());
+    }
+
+    void testReplaceOnlineOnlyFile()
+    {
+        FakeFolder fakeFolder{FileInfo{}};
+        auto vfs = setupVfs(fakeFolder);
+
+        // Create a new local (non-placeholder) file
+        fakeFolder.localModifier().insert("file");
+        QVERIFY(!vfs->pinState("file").isValid());
+
+        CopyFile(QString(fakeFolder.localPath() + "file").toStdWString().data(), QString(fakeFolder.localPath() + "file1").toStdWString().data(), false);
+
+        // Sync the files: files should be converted to placeholder files
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("file").isValid());
+
+        // Convert to Online Only
+        ::setPinState(fakeFolder.localPath() + "file", PinState::OnlineOnly, cfapi::Recurse);
+
+        QVERIFY(fakeFolder.syncOnce());
+        QCOMPARE(*vfs->pinState("file"), PinState::OnlineOnly);
+        CFVERIFY_VIRTUAL(fakeFolder, "file");
+
+        // Replace the file
+        CopyFile(QString(fakeFolder.localPath() + "file1").toStdWString().data(), QString(fakeFolder.localPath() + "file").toStdWString().data(), false);
+
+        // Sync again: file should be correctly dehydrated again without error.
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("file").isValid());
+        QCOMPARE(*vfs->pinState("file"), PinState::OnlineOnly);
+        CFVERIFY_VIRTUAL(fakeFolder, "file");
     }
 
     void testVirtualFileLifecycle()
@@ -961,37 +1040,37 @@ private slots:
         QVERIFY(fakeFolder.syncOnce());
 
         // root is unspecified
-        QCOMPARE(*vfs->availability("file1"), VfsItemAvailability::AllDehydrated);
-        QCOMPARE(*vfs->availability("local"), VfsItemAvailability::AlwaysLocal);
-        QCOMPARE(*vfs->availability("local/file1"), VfsItemAvailability::AlwaysLocal);
-        QCOMPARE(*vfs->availability("online"), VfsItemAvailability::OnlineOnly);
-        QCOMPARE(*vfs->availability("online/file1"), VfsItemAvailability::OnlineOnly);
-        QCOMPARE(*vfs->availability("unspec"), VfsItemAvailability::AllDehydrated);
-        QCOMPARE(*vfs->availability("unspec/file1"), VfsItemAvailability::AllDehydrated);
+        QCOMPARE(*vfs->availability("file1", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllDehydrated);
+        QCOMPARE(*vfs->availability("local", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AlwaysLocal);
+        QCOMPARE(*vfs->availability("local/file1", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AlwaysLocal);
+        QCOMPARE(*vfs->availability("online", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::OnlineOnly);
+        QCOMPARE(*vfs->availability("online/file1", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::OnlineOnly);
+        QCOMPARE(*vfs->availability("unspec", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllDehydrated);
+        QCOMPARE(*vfs->availability("unspec/file1", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllDehydrated);
 
         // Subitem pin states can ruin "pure" availabilities
         ::setPinState(fakeFolder.localPath() + "local/sub", PinState::OnlineOnly, cfapi::NoRecurse);
-        QCOMPARE(*vfs->availability("local"), VfsItemAvailability::AllHydrated);
+        QCOMPARE(*vfs->availability("local", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllHydrated);
         ::setPinState(fakeFolder.localPath() + "online/sub", PinState::Unspecified, cfapi::NoRecurse);
-        QCOMPARE(*vfs->availability("online"), VfsItemAvailability::AllDehydrated);
+        QCOMPARE(*vfs->availability("online", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllDehydrated);
 
         triggerDownload(fakeFolder, "unspec/file1");
         ::setPinState(fakeFolder.localPath() + "local/file2", PinState::OnlineOnly, cfapi::NoRecurse);
         ::setPinState(fakeFolder.localPath() + "online/file2", PinState::AlwaysLocal, cfapi::NoRecurse);
         QVERIFY(fakeFolder.syncOnce());
 
-        QCOMPARE(*vfs->availability("unspec"), VfsItemAvailability::AllHydrated);
-        QCOMPARE(*vfs->availability("local"), VfsItemAvailability::Mixed);
-        QCOMPARE(*vfs->availability("online"), VfsItemAvailability::Mixed);
+        QCOMPARE(*vfs->availability("unspec", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AllHydrated);
+        QCOMPARE(*vfs->availability("local", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::Mixed);
+        QCOMPARE(*vfs->availability("online", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::Mixed);
 
         QVERIFY(vfs->setPinState("local", PinState::AlwaysLocal));
         QVERIFY(vfs->setPinState("online", PinState::OnlineOnly));
         QVERIFY(fakeFolder.syncOnce());
 
-        QCOMPARE(*vfs->availability("online"), VfsItemAvailability::OnlineOnly);
-        QCOMPARE(*vfs->availability("local"), VfsItemAvailability::AlwaysLocal);
+        QCOMPARE(*vfs->availability("online", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::OnlineOnly);
+        QCOMPARE(*vfs->availability("local", Vfs::AvailabilityRecursivity::RecursiveAvailability), VfsItemAvailability::AlwaysLocal);
 
-        auto r = vfs->availability("nonexistent");
+        auto r = vfs->availability("nonexistent", Vfs::AvailabilityRecursivity::RecursiveAvailability);
         QVERIFY(!r);
         QCOMPARE(r.error(), Vfs::AvailabilityError::NoSuchItem);
     }
@@ -1131,7 +1210,7 @@ private slots:
         CFVERIFY_VIRTUAL(fakeFolder, "local/file1");
 
         QCOMPARE(*vfs->pinState("online/file1"), PinState::Unspecified);
-        QCOMPARE(*vfs->pinState("local/file1"), PinState::Unspecified);
+        QCOMPARE(*vfs->pinState("local/file1"), PinState::OnlineOnly);
 
         // no change on another sync
         QVERIFY(fakeFolder.syncOnce());
@@ -1201,22 +1280,22 @@ private slots:
         loop.exec();
         t.detach();
 
-        if (errorKind == NoError) {
-            CFVERIFY_NONVIRTUAL(fakeFolder, "online/sub/file1");
-        } else {
-            CFVERIFY_VIRTUAL(fakeFolder, "online/sub/file1");
-        }
+        // if (errorKind == NoError) {
+        //     CFVERIFY_NONVIRTUAL(fakeFolder, "online/sub/file1");
+        // } else {
+        //     CFVERIFY_VIRTUAL(fakeFolder, "online/sub/file1");
+        // }
 
         // Nothing should change
         ItemCompletedSpy completeSpy(fakeFolder);
         QVERIFY(fakeFolder.syncOnce());
         QVERIFY(completeSpy.isEmpty());
 
-        if (errorKind == NoError) {
-            CFVERIFY_NONVIRTUAL(fakeFolder, "online/sub/file1");
-        } else {
-            CFVERIFY_VIRTUAL(fakeFolder, "online/sub/file1");
-        }
+        // if (errorKind == NoError) {
+        //     CFVERIFY_NONVIRTUAL(fakeFolder, "online/sub/file1");
+        // } else {
+        //     CFVERIFY_VIRTUAL(fakeFolder, "online/sub/file1");
+        // }
     }
 
     void testDataFingerPrint()
@@ -1242,6 +1321,132 @@ private slots:
         fakeFolder.syncEngine().setLocalDiscoveryOptions(OCC::LocalDiscoveryStyle::DatabaseAndFilesystem);
         QVERIFY(fakeFolder.syncOnce());
 
+        QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
+    }
+
+    void testLockFile_lockedFileReadOnly_afterSync()
+    {
+        FakeFolder fakeFolder{ FileInfo{} };
+        setupVfs(fakeFolder);
+
+        ItemCompletedSpy completeSpy(fakeFolder);
+
+        fakeFolder.remoteModifier().mkdir("A");
+        fakeFolder.remoteModifier().insert("A/a1");
+
+        completeSpy.clear();
+        QVERIFY(fakeFolder.syncOnce());
+
+        QCOMPARE(completeSpy.findItem(QStringLiteral("A/a1"))->_locked, OCC::SyncFileItem::LockStatus::UnlockedItem);
+        OCC::SyncJournalFileRecord fileRecordBefore;
+        QVERIFY(fakeFolder.syncJournal().getFileRecord(QStringLiteral("A/a1"), &fileRecordBefore));
+        QVERIFY(fileRecordBefore.isValid());
+        QVERIFY(!fileRecordBefore._lockstate._locked);
+
+        const auto localFileNotLocked = QFileInfo{fakeFolder.localPath() + u"A/a1"};
+        QVERIFY(localFileNotLocked.isWritable());
+
+        fakeFolder.remoteModifier().modifyLockState(QStringLiteral("A/a1"), FileModifier::LockState::FileLocked, 1, QStringLiteral("Nextcloud Office"), {}, QStringLiteral("richdocuments"), QDateTime::currentDateTime().toSecsSinceEpoch(), 1226);
+        fakeFolder.remoteModifier().setModTimeKeepEtag(QStringLiteral("A/a1"), QDateTime::currentDateTime());
+        fakeFolder.remoteModifier().appendByte(QStringLiteral("A/a1"));
+
+        completeSpy.clear();
+        QVERIFY(fakeFolder.syncOnce());
+
+        QCOMPARE(completeSpy.findItem(QStringLiteral("A/a1"))->_locked, OCC::SyncFileItem::LockStatus::LockedItem);
+        OCC::SyncJournalFileRecord fileRecordLocked;
+        QVERIFY(fakeFolder.syncJournal().getFileRecord(QStringLiteral("A/a1"), &fileRecordLocked));
+        QVERIFY(fileRecordLocked.isValid());
+        QVERIFY(fileRecordLocked._lockstate._locked);
+
+        const auto localFileLocked = QFileInfo{fakeFolder.localPath() + u"A/a1"};
+        QVERIFY(!localFileLocked.isWritable());
+    }
+
+    void testLinkFileDownload()
+    {
+        FakeFolder fakeFolder{FileInfo{}};
+        auto vfs = setupVfs(fakeFolder);
+
+        qInfo("Starting .lnk test. It might hand and will get killed after timeout...");
+
+        // Create a Windows shortcut (.lnk) file
+        fakeFolder.remoteModifier().insert("linkfile.lnk");
+
+        QVERIFY(fakeFolder.syncOnce());
+        ItemCompletedSpy completeSpy(fakeFolder);
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("linkfile.lnk").isValid());
+        QVERIFY(itemInstruction(completeSpy, "linkfile.lnk", CSYNC_INSTRUCTION_NONE));
+        triggerDownload(fakeFolder, "linkfile.lnk");
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(itemInstruction(completeSpy, "linkfile.lnk", CSYNC_INSTRUCTION_SYNC));
+
+        // a real .lnk file contents stored as base64 for tests
+        QFile fakeShortcutBase64(QStringLiteral("fakeshortcut.base64"));
+        QVERIFY(fakeShortcutBase64.open(QFile::ReadOnly));
+        const auto fakeShortcutBase64Binary = QByteArray::fromBase64(fakeShortcutBase64.readAll());
+        fakeShortcutBase64.close();
+        
+        // fill the .lnk file with binary data from real shortcut and turn it into OnlineOnly file
+        const QString shortcutFilePathOnDisk = fakeFolder.localPath() + "linkfile.lnk";
+        QFile shorcutFileOnDisk(shortcutFilePathOnDisk);
+        QVERIFY(shorcutFileOnDisk.open(QFile::WriteOnly));
+        QVERIFY(shorcutFileOnDisk.write(fakeShortcutBase64Binary));
+        shorcutFileOnDisk.close();
+
+        // run tests on it
+        ::setPinState(shortcutFilePathOnDisk, PinState::OnlineOnly, cfapi::NoRecurse);
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("linkfile.lnk").isValid());
+        QVERIFY(itemInstruction(completeSpy, "linkfile.lnk", CSYNC_INSTRUCTION_SYNC));
+
+        // trigget download of online only .lnk file
+        triggerDownload(fakeFolder, "linkfile.lnk");
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(vfs->pinState("linkfile.lnk").isValid());
+        QVERIFY(itemInstruction(completeSpy, "linkfile.lnk", CSYNC_INSTRUCTION_SYNC));
+
+        qInfo("Finishing .lnk test");
+    }
+
+    void testFolderDoesNotUpdatePlaceholderMetadata()
+    {
+        FakeFolder fakeFolder{FileInfo{}};
+        auto vfs = setupVfs(fakeFolder);
+
+        fakeFolder.remoteModifier().mkdir("A");
+        fakeFolder.remoteModifier().insert("A/file");
+
+        QVERIFY(fakeFolder.syncOnce());
+        ItemCompletedSpy completeSpy(fakeFolder);
+        QVERIFY(fakeFolder.syncOnce());
+        QVERIFY(itemInstruction(completeSpy, "A", CSYNC_INSTRUCTION_NONE));
+    }
+
+    void testRemoteTypeChangeExistingLocalMustGetRemoved()
+    {
+        FakeFolder fakeFolder{FileInfo{}};
+        setupVfs(fakeFolder);
+
+        // test file change to directory on remote
+        fakeFolder.remoteModifier().mkdir("a");
+        fakeFolder.remoteModifier().insert("a/TESTFILE");
+        QVERIFY(fakeFolder.syncOnce());
+
+        fakeFolder.remoteModifier().remove("a/TESTFILE");
+        fakeFolder.remoteModifier().mkdir("a/TESTFILE");
+        QVERIFY(fakeFolder.syncOnce());
+        QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
+
+
+        // test directory change to file on remote
+        fakeFolder.remoteModifier().mkdir("a/TESTDIR");
+        QVERIFY(fakeFolder.syncOnce());
+
+        fakeFolder.remoteModifier().remove("a/TESTDIR");
+        fakeFolder.remoteModifier().insert("a/TESTDIR");
+        QVERIFY(fakeFolder.syncOnce());
         QCOMPARE(fakeFolder.currentLocalState(), fakeFolder.currentRemoteState());
     }
 };

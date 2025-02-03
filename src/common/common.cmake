@@ -3,6 +3,7 @@
 # help keep track of the different code licenses.
 set(common_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/checksums.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/checksumcalculator.cpp
     ${CMAKE_CURRENT_LIST_DIR}/filesystembase.cpp
     ${CMAKE_CURRENT_LIST_DIR}/ownsql.cpp
     ${CMAKE_CURRENT_LIST_DIR}/preparedsqlquerymanager.cpp
@@ -15,5 +16,19 @@ set(common_SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/plugin.cpp
     ${CMAKE_CURRENT_LIST_DIR}/syncfilestatus.cpp
 )
+
+if(WIN32)
+    list(APPEND common_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/utility_win.cpp
+    )
+elseif(APPLE)
+    list(APPEND common_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/utility_mac.mm
+    )
+elseif(UNIX AND NOT APPLE)
+    list(APPEND common_SOURCES
+        ${CMAKE_CURRENT_LIST_DIR}/utility_unix.cpp
+    )
+endif()
 
 configure_file(${CMAKE_CURRENT_LIST_DIR}/vfspluginmetadata.json.in ${CMAKE_CURRENT_BINARY_DIR}/vfspluginmetadata.json)

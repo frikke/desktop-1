@@ -31,16 +31,7 @@ class QFile;
 
 namespace OCC {
 
-/**
- * Tags for checksum headers values.
- * They are here for being shared between Upload- and Download Job
- */
-static const char checkSumMD5C[] = "MD5";
-static const char checkSumSHA1C[] = "SHA1";
-static const char checkSumSHA2C[] = "SHA256";
-static const char checkSumSHA3C[] = "SHA3-256";
-static const char checkSumAdlerC[] = "Adler32";
-
+class ChecksumCalculator;
 class SyncJournalDb;
 
 /**
@@ -65,12 +56,7 @@ OCSYNC_EXPORT QByteArray parseChecksumHeaderType(const QByteArray &header);
 /// Checks OWNCLOUD_DISABLE_CHECKSUM_UPLOAD
 OCSYNC_EXPORT bool uploadChecksumEnabled();
 
-// Exported functions for the tests.
-QByteArray OCSYNC_EXPORT calcMd5(QIODevice *device);
-QByteArray OCSYNC_EXPORT calcSha1(QIODevice *device);
-#ifdef ZLIB_FOUND
-QByteArray OCSYNC_EXPORT calcAdler32(QIODevice *device);
-#endif
+OCSYNC_EXPORT QByteArray calcSha256(const QByteArray &data);
 
 /**
  * Computes the checksum of a file.
@@ -98,19 +84,9 @@ public:
     void start(const QString &filePath);
 
     /**
-     * Computes the checksum for the given device.
-     *
-     * done() is emitted when the calculation finishes.
-     *
-     * The device ownership transfers into the thread that
-     * will compute the checksum. It must not have a parent.
-     */
-    void start(std::unique_ptr<QIODevice> device);
-
-    /**
      * Computes the checksum synchronously.
      */
-    static QByteArray computeNow(QIODevice *device, const QByteArray &checksumType);
+    static QByteArray computeNow(const QString &filePath, const QByteArray &checksumType);
 
     /**
      * Computes the checksum synchronously on file. Convenience wrapper for computeNow().
@@ -124,12 +100,14 @@ private slots:
     void slotCalculationDone();
 
 private:
-    void startImpl(std::unique_ptr<QIODevice> device);
+    void startImpl(const QString &filePath);
 
     QByteArray _checksumType;
 
     // watcher for the checksum calculation thread
     QFutureWatcher<QByteArray> _watcher;
+
+    QScopedPointer<ChecksumCalculator> _checksumCalculator;
 };
 
 /**
@@ -158,16 +136,6 @@ public:
      * be emitted.
      */
     void start(const QString &filePath, const QByteArray &checksumHeader);
-
-    /**
-     * Check a device's actual checksum against the provided checksumHeader
-     *
-     * Like the other start() but works on an device.
-     *
-     * The device ownership transfers into the thread that
-     * will compute the checksum. It must not have a parent.
-     */
-    void start(std::unique_ptr<QIODevice> device, const QByteArray &checksumHeader);
 
     [[nodiscard]] QByteArray calculatedChecksumType() const;
     [[nodiscard]] QByteArray calculatedChecksum() const;

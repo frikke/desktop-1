@@ -20,7 +20,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QTextStream>
-#include <qmutex.h>
+#include <QRecursiveMutex>
 
 #include "common/utility.h"
 #include "owncloudlib.h"
@@ -35,6 +35,12 @@ class OWNCLOUDSYNC_EXPORT Logger : public QObject
 {
     Q_OBJECT
 public:
+    enum class LogType {
+        Log,
+        DeleteLog,
+    };
+    Q_ENUM(LogType)
+
     bool isLoggingToFile() const;
 
     void doLog(QtMsgType type, const QMessageLogContext &ctx, const QString &message);
@@ -42,11 +48,12 @@ public:
     static Logger *instance();
 
     void postGuiLog(const QString &title, const QString &message);
-    void postOptionalGuiLog(const QString &title, const QString &message);
     void postGuiMessage(const QString &title, const QString &message);
 
     QString logFile() const;
     void setLogFile(const QString &name);
+
+    void setPermanentDeleteLogFile(const QString &name);
 
     void setLogExpire(int expire);
 
@@ -87,10 +94,9 @@ signals:
 
     void guiLog(const QString &, const QString &);
     void guiMessage(const QString &, const QString &);
-    void optionalGuiLog(const QString &, const QString &);
 
 public slots:
-    void enterNextLogFile();
+    void enterNextLogFile(const QString &baseFileName, OCC::Logger::LogType type);
 
 private:
     Logger(QObject *parent = nullptr);
@@ -98,20 +104,24 @@ private:
 
     void closeNoLock();
     void dumpCrashLog();
-    void enterNextLogFileNoLock();
+    void enterNextLogFileNoLock(const QString &baseFileName, LogType type);
     void setLogFileNoLock(const QString &name);
+    void setPermanentDeleteLogFileNoLock(const QString &name);
 
     QFile _logFile;
     bool _doFileFlush = false;
+    int _linesCounter = 0;
     int _logExpire = 0;
     bool _logDebug = false;
     QScopedPointer<QTextStream> _logstream;
-    mutable QMutex _mutex;
+    mutable QRecursiveMutex _mutex;
     QString _logDirectory;
     bool _temporaryFolderLogDir = false;
     QSet<QString> _logRules;
     QVector<QString> _crashLog;
     int _crashLogIndex = 0;
+    QFile _permanentDeleteLogFile;
+    QScopedPointer<QTextStream> _permanentDeleteLogStream;
 };
 
 } // namespace OCC

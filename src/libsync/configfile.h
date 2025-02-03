@@ -41,7 +41,7 @@ public:
     ConfigFile();
 
     enum Scope { UserScope,
-        SystemScope };
+        SystemScope, LegacyScope };
 
     [[nodiscard]] QString configPath() const;
     [[nodiscard]] QString configFile() const;
@@ -93,6 +93,9 @@ public:
     [[nodiscard]] bool promptDeleteFiles() const;
     void setPromptDeleteFiles(bool promptDeleteFiles);
 
+    [[nodiscard]] int deleteFilesThreshold() const;
+    void setDeleteFilesThreshold(int thresholdValue);
+
     [[nodiscard]] bool crashReporter() const;
     void setCrashReporter(bool enabled);
 
@@ -141,6 +144,10 @@ public:
     /** [checked, size in MB] **/
     [[nodiscard]] QPair<bool, qint64> newBigFolderSizeLimit() const;
     void setNewBigFolderSizeLimit(bool isChecked, qint64 mbytes);
+    [[nodiscard]] bool notifyExistingFoldersOverLimit() const;
+    void setNotifyExistingFoldersOverLimit(const bool notify);
+    [[nodiscard]] bool stopSyncingExistingFoldersOverLimit() const;
+    void setStopSyncingExistingFoldersOverLimit(const bool stopSyncing);
     [[nodiscard]] bool useNewBigFolderSizeLimit() const;
     [[nodiscard]] bool confirmExternalStorage() const;
     void setConfirmExternalStorage(bool);
@@ -149,12 +156,19 @@ public:
     [[nodiscard]] bool moveToTrash() const;
     void setMoveToTrash(bool);
 
+    /** If we should force loginflow v2 */
+    [[nodiscard]] bool forceLoginV2() const;
+    void setForceLoginV2(bool);
+
     [[nodiscard]] bool showMainDialogAsNormalWindow() const;
 
     static bool setConfDir(const QString &value);
 
     [[nodiscard]] bool optionalServerNotifications() const;
     void setOptionalServerNotifications(bool show);
+
+    [[nodiscard]] bool showChatNotifications() const;
+    void setShowChatNotifications(bool show);
 
     [[nodiscard]] bool showCallNotifications() const;
     void setShowCallNotifications(bool show);
@@ -187,7 +201,9 @@ public:
         See: https://github.com/nextcloud/client_updater_server/pull/36 */
     [[nodiscard]] int updateSegment() const;
 
-    [[nodiscard]] QString updateChannel() const;
+    [[nodiscard]] QString currentUpdateChannel() const;
+    [[nodiscard]] QString defaultUpdateChannel() const;
+    [[nodiscard]] QStringList validUpdateChannels() const;
     void setUpdateChannel(const QString &channel);
 
     [[nodiscard]] QString overrideServerUrl() const;
@@ -212,6 +228,17 @@ public:
     [[nodiscard]] QString clientVersionString() const;
     void setClientVersionString(const QString &version);
 
+    /** If the option 'Launch on system startup' is set
+        Updated by configVersionMigration() at client startup. */
+    [[nodiscard]] bool launchOnSystemStartup() const;
+    void setLaunchOnSystemStartup(const bool autostart);
+
+    [[nodiscard]] bool serverHasValidSubscription() const;
+    void setServerHasValidSubscription(bool valid);
+
+    [[nodiscard]] QString desktopEnterpriseChannel() const;
+    void setDesktopEnterpriseChannel(const QString &channel);
+
     /**  Returns a new settings pre-set in a specific group.  The Settings will be created
          with the given parent. If no parent is specified, the caller must destroy the settings */
     static std::unique_ptr<QSettings> settingsWithGroup(const QString &group, QObject *parent = nullptr);
@@ -222,9 +249,6 @@ public:
     /// Set during first time migration of legacy accounts in AccountManager
     [[nodiscard]] static QString discoveredLegacyConfigPath();
     static void setDiscoveredLegacyConfigPath(const QString &discoveredLegacyConfigPath);
-
-    [[nodiscard]] bool macFileProviderModuleEnabled() const;
-    void setMacFileProviderModuleEnabled(const bool moduleEnabled);
 
 protected:
     [[nodiscard]] QVariant getPolicySetting(const QString &policy, const QVariant &defaultValue = QVariant()) const;

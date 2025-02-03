@@ -21,6 +21,7 @@ class QLocalServer;
 class QLocalSocket;
 
 namespace OCC {
+class EncryptedFolderMetadataHandler;
 class GETFileJob;
 class SyncJournalDb;
 class VfsCfApi;
@@ -45,8 +46,8 @@ public:
     AccountPtr account() const;
     void setAccount(const AccountPtr &account);
 
-    QString remotePath() const;
-    void setRemotePath(const QString &remotePath);
+    [[nodiscard]] QString remoteSyncRootPath() const;
+    void setRemoteSyncRootPath(const QString &path);
 
     QString localPath() const;
     void setLocalPath(const QString &localPath);
@@ -71,18 +72,19 @@ public:
 
     Status status() const;
 
+    [[nodiscard]] int errorCode() const;
+    [[nodiscard]] int statusCode() const;
+    [[nodiscard]] QString errorString() const;
+
     void start();
     void cancel();
     void finalize(OCC::VfsCfApi *vfs);
 
-public slots:
-    void slotCheckFolderId(const QStringList &list);
-    void slotFolderIdError();
-    void slotCheckFolderEncryptedMetadata(const QJsonDocument &json);
-    void slotFolderEncryptedMetadataError(const QByteArray &fileId, int httpReturnCode);
-
 signals:
     void finished(HydrationJob *job);
+
+private slots:
+    void slotFetchMetadataJobFinished(int statusCode, const QString &message);
 
 private:
     void emitFinished(Status status);
@@ -97,7 +99,7 @@ private:
     void startServerAndWaitForConnections();
 
     AccountPtr _account;
-    QString _remotePath;
+    QString _remoteSyncRootPath;
     QString _localPath;
     SyncJournalDb *_journal = nullptr;
     bool _isCancelled = false;
@@ -114,6 +116,12 @@ private:
     QLocalSocket *_signalSocket = nullptr;
     GETFileJob *_job = nullptr;
     Status _status = Success;
+    int _errorCode = 0;
+    int _statusCode = 0;
+    QString _errorString;
+    QString _remoteParentPath;
+
+    QScopedPointer<EncryptedFolderMetadataHandler> _encryptedFolderMetadataHandler;
 };
 
 } // namespace OCC
